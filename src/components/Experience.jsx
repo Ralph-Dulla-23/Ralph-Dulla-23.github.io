@@ -21,7 +21,8 @@ const skills = {
     ],
     Backend: [
         { name: 'Node.js', icon: SiNodedotjs, color: 'text-green-500' },
-        { name: 'Firebase', icon: SiFirebase, color: 'text-orange-500' }
+        { name: 'Firebase', icon: SiFirebase, color: 'text-orange-500' },
+        { name: 'Flask', icon: SiFlask, color: 'text-white' }
     ],
     Tools: [
         { name: 'VS Code', icon: VscCode, color: 'text-blue-500' },
@@ -33,8 +34,7 @@ const skills = {
     Frameworks: [
         { name: 'React', icon: SiReact, color: 'text-cyan-400' },
         { name: 'Tailwind', icon: SiTailwindcss, color: 'text-cyan-500' },
-        { name: 'Flutter', icon: SiFlutter, color: 'text-blue-400' },
-        { name: 'Flask', icon: SiFlask, color: 'text-white' }
+        { name: 'Flutter', icon: SiFlutter, color: 'text-blue-400' }
     ]
 };
 
