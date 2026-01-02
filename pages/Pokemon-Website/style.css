@@ -1,0 +1,24 @@
+*{
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    background-color: #24252a;
+    color: aliceblue;
+}
+header{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 30px 50px;
+}
+.logo1{
+    height: 70px;
+}
+.logo2{
+    height: 60px;
+    margin-right: 0px;
+}
+.nav li{
+    display: inline-block;
+    padding: 0px 20px;
+}

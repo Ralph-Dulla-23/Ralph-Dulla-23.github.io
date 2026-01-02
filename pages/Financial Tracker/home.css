@@ -1,0 +1,134 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat&display=swap');
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Montserrat', sans-serif;
+    background-color: #064789;
+}
+a{
+    background-color: transparent;
+}
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 30px 10%;
+    background-color: aliceblue;
+}
+
+.nav1 li {
+    display: inline-block;
+    padding: 0px 10px;
+    color: black;
+    background-color: transparent;
+    font-size: 25px;
+    cursor: pointer;
+}
+nav ul{
+    background-color: aliceblue;
+}
+
+h1 {
+    color: black;
+    background-color: transparent; 
+    font-size: 40px;
+}
+#title{
+    font-size: 50px;
+    margin-left: 200px;
+    text-align: left;
+    color: white;
+    margin: 40px 200px;
+}
+
+.maintop{
+   display: flex;
+   padding: 20px 40px;
+}
+
+.boxleft{
+   border-radius: 15px;
+   margin: 0px 160px;
+   padding: 20px 40px;
+   width: 20%;
+   height: 550px;
+   background-color: aliceblue;
+}
+.complex-container{
+    padding: 20px 40px;
+    display: flex;
+    
+}
+
+
+.content-1{
+    flex: 0.4;
+    margin-left: 160px;
+    margin-right: 0px;
+    background-color: aliceblue;
+    height: 550px;
+    border-radius: 15px;
+}
+.content-1 .box{
+    height: 200px;
+    width: 200px;
+    background-color: black;
+    margin: 40px auto;
+    border-radius: 50%;
+}
+
+.content-1 h1{
+    margin-top: auto;
+    padding: 10px 30px;
+    text-align: center;
+}
+
+.content-3 h2{
+    background-color: aliceblue;
+    padding: 10px 15px;
+    margin-left: 30px;
+    margin-top: 4px;
+}
+
+.content-1 p{
+    padding: 0px 30px;
+    text-align: justify;
+    font-size: 15px;
+    background-color: aliceblue;
+}
+.content-2 .money{
+    text-align: left;
+    margin-top: 30px ;
+    font-size: 130px;
+}
+
+.right-side{
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    margin-right: 160px;
+    margin-left: 40px;
+    
+}
+
+.right-side h1{
+    font-size: 40px;
+    padding: 5px 10px;
+}
+
+.content-2{
+    flex: 1;
+    margin-bottom: 20px;
+    border-radius: 15px;
+    background-color: aliceblue;
+    height: 200px;
+}
+
+.content-3{
+    flex: 1;
+    background-color: aliceblue;
+    border-radius: 15px;
+    margin-top: 20px;
+}

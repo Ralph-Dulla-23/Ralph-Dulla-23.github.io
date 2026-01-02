@@ -1,0 +1,278 @@
+    *{
+    font-family: 'League Spartan', sans-serif;
+    margin: 0;
+    padding: 0px;
+    box-sizing: border-box;
+    position: relative;
+}
+
+html{
+    scroll-behavior: smooth;
+}
+@keyframes gradient {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+.logoT{
+    font-size: 120px;
+    margin-left: 200px;
+    text-align: left;
+    color: rgb(245, 245, 245, 0.7);
+}
+h1{
+    font-size: 100px;
+    margin-left: 100px;
+    text-align: left;
+    color: rgb(221, 221, 221, 1);
+}
+.Dog{
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+    float: right;
+    margin: -100px 200px;
+    position: relative;
+}
+p{
+    font-size: 40px;
+    margin-left: 200px;
+    margin-top: 10px;
+    text-align: left;
+    color: rgb(202, 202, 202);
+}
+.btn{
+    font-size: 30px;
+    padding: 15px 20px;
+    margin-left: 200px;
+    margin-top: 10px;
+    background: none;
+    border: none;
+    border-radius: 40px;
+    background-color: #272a2a;
+    width: 10%;
+    color: rgb(202, 202, 202);
+    cursor: pointer;
+}
+
+.button2{
+    margin-left: 10px;
+}
+.about h2{
+    font-size: 102px;
+    color: #9f9f9f;
+    font-weight: 300;
+    letter-spacing: 2px;
+    padding: 19.6% 0;
+    margin: 40px 0;
+    
+}
+.about h3{
+    color: #5f5f5f;
+    font-size: 40px;
+    text-align: right;
+    float: right;
+    margin-left:400px;
+    padding: 30px 10px;
+    position: relative;
+    text-align: justify;
+}
+.about{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 30px 20%;
+    background-color: aliceblue;
+}
+.content{
+    font-size: 60px;
+    padding:  9.6% 0;;
+}
+.content p{
+    text-align: justify;
+    margin: 30px 100px;
+    color: black;
+    padding: 50px 10px;
+}
+.content h4{
+    font-size: 20px;
+    text-decoration: none;
+    color: rgb(151, 151, 151);
+    margin: 0px auto;
+    margin-top: 150px;
+    margin-bottom: -100px;
+    align-items: center;
+    text-align: center;
+}
+
+.para1{
+    background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+    background-size: 400% 400%;
+    animation: gradient 15s ease infinite;
+}
+.logo{
+    padding: 18.6% 0;
+}
+
+h2{
+    font-size: 102px;
+    color: #adadad;
+    text-align: center;
+    font-weight: 300;
+    letter-spacing: 2px;
+    padding: 30px 0;
+    margin: 20px 0 10px;
+}
+h4{
+    font-size: 102px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    margin: 20px 0 10px;
+    margin: 0 40px;
+}
+.pokemon{
+    background: linear-gradient(-45deg, #194596, #0A285F);
+}
+.pokemon a{
+    color: #FFCC00;
+}
+.pokemon a:hover{
+    color: #c79500;
+    transition: 0.8s;
+}
+.fashion{
+    background-color: #fef9f8;
+    color: #ef9273;
+    text-align: right;
+}
+.fashion a{
+    background-color: #fef9f8;
+    color: #ef9273;
+  
+}
+.fashion a:hover{
+    color: #b86f56;
+    transition: 0.8s ;
+}
+.wine{
+     background-color: #a62f4e;
+     
+}
+.wine a{
+    color: #f5f5f5;
+}
+.wine a:hover{
+    color: #b86f56;
+    transition: 0.8s;
+}
+.burger{
+    background-color: #05A8AA;
+    text-align: right;
+}
+.burger a{
+    color: #FFF;
+}
+.burger a:hover{
+    color: #047678;
+    transition: 0.8s;
+}
+.tracker{
+    background-color: #064789;
+}
+.tracker a:hover{
+    color: rgb(163, 163, 163);
+    transition: 0.8s;
+}
+.tracker a{
+    color: whitesmoke;
+}
+
+.logo2, .logo3, .logo4, .logo5, .logo6{
+    padding: 5% 0;
+}
+a{
+    text-decoration: none;
+}
+
+
+
+@media (max-width:1450px){ 
+    .Dog{
+        width: 300px;
+        height: 300px;
+        border-radius: 50%;
+        float: right;
+        margin: -50px 200px;
+        position: relative;
+    }
+    .logoT{
+        font-size: 60px;
+        margin-left: 200px;
+        text-align: left;
+        color: rgb(245, 245, 245, 0.7);
+    }
+    .btn{
+        font-size: 20px;
+        padding: 15px 20px;
+        margin-left: 200px;
+        margin-top: 10px;
+        background: none;
+        border: none;
+        border-radius: 40px;
+        background-color: #272a2a;
+        width: 10%;
+        color: rgb(202, 202, 202);
+        cursor: pointer;
+    }
+    
+    .button2{
+        margin-left: 10px;
+    }
+    .about h2{
+        font-size: 40px;
+        color: #9f9f9f;
+        font-weight: 300;
+        letter-spacing: 2px;
+        padding: 22% 0;
+        margin: 100px 0;
+        
+    }
+    p{
+        font-size: 30px;
+        margin-left: 200px;
+        margin-top: 10px;
+        text-align: left;
+        color: rgb(202, 202, 202);
+    }
+    
+    .about h3{
+        color: #5f5f5f;
+        font-size: 30px;
+        text-align: right;
+        float: right;
+        margin-left:200px;
+        padding: 30px 10px;
+        position: relative;
+        text-align: justify;
+    }
+    .about{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 30px 20%;
+        background-color: aliceblue;
+    }
+    .content{
+        font-size: 60px;
+        padding:  19.6% 0;;
+    }.logo{
+        padding: 21.5% 0;
+    }
+    
+}

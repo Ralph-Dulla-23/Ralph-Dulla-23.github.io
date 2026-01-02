@@ -1,0 +1,133 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat&display=swap');
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Montserrat', sans-serif;
+    background-color: #064789;
+}
+a{
+    background: none;
+}
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 30px 10%;
+    background-color: aliceblue;
+}
+
+.nav1 li {
+    display: inline-block;
+    padding: 0px 10px;
+    color: black;
+    background-color: transparent;
+    font-size: 25px;
+}
+nav ul{
+    background-color: aliceblue;
+}
+
+h1 {
+    color: black;
+    background-color: transparent; 
+    font-size: 40px;
+}
+#title{
+    font-size: 50px;
+    margin-left: 200px;
+    text-align: left;
+    color: white;
+    margin: 40px 200px;
+}
+
+.dropdown{
+    background-color: aliceblue;
+    width: 260px;
+    margin: 50px 402px;
+    border-radius: 15px;
+    display: flex;
+}
+.dropdown h1{
+    font-size: 25px;
+    padding: 10px 10px;
+}
+.dropdown p{
+    font-size: 25px;
+    margin-top: 15px;
+    text-align: right;
+    background-color: transparent;
+}
+
+.content{
+    gap: 80px;
+    justify-content: center;
+    padding: 0px 100px; 
+    display: flex;
+}
+
+.left h1, p{
+    background-color: aliceblue;
+}
+
+.right h1, p{
+    background-color: aliceblue;
+}
+.left .date{
+    background-color: aliceblue;
+}
+.left{
+    width: 300px;
+}
+
+.content p{
+    font-size: 24px;
+    margin-top: 20px;
+}
+
+.right{
+    flex: 0.3;
+}
+.content-1{
+    flex: 0.3;
+    background-color: aliceblue;
+    height: 550px;
+    border-radius: 15px;
+    padding: 20px;
+}
+.content-2{
+    flex: 0.3;
+    background-color: aliceblue;
+    height: 550px;
+    border-radius: 15px;
+    padding: 20px;
+}
+.content-1 h2{
+    background-color: #064789;
+}
+.date h2{
+    background-color: #064789;
+}
+.date p{
+    background-color:#064789;
+    border-radius: 15px;
+}
+.date{
+    display: flex;
+    justify-content: space-between;
+    background-color: #064789;
+    border-radius: 15px;
+    margin: 10px 0;
+}
+.date h2{
+    font-size: 25px;
+    padding: 10px 11px;
+    border-radius: 15px;
+    color: whitesmoke;
+}
+.date p{
+     padding: auto 11px; 
+     margin-right: 20px;
+     color: whitesmoke;
+}
