@@ -28,8 +28,11 @@ const Projects = () => {
 
             <div className="grid grid-cols-1 gap-6">
                 {projects.map((project, index) => (
-                    <div
+                    <a
                         key={index}
+                        href={project.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="group block p-6 rounded-lg bg-white dark:bg-gray-900 border border-border dark:border-gray-800 hover:border-black/30 dark:hover:border-gray-500 transition-all shadow-sm hover:shadow-md dark:shadow-none"
                     >
                         <div className="flex justify-between items-start mb-4">
@@ -48,7 +51,7 @@ const Projects = () => {
                                 </span>
                             ))}
                         </div>
-                    </div>
+                    </a>
                 ))}
             </div>
         </section>
