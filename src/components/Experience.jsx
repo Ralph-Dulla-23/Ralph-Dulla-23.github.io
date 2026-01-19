@@ -58,7 +58,14 @@ const experience = [
         title: 'Bachelor of Science in Computer Science',
         period: 'July 2022 – Present',
         location: 'Davao City, Philippines',
-        description: 'Current student.'
+        description: 'Undergraduate student.'
+    },
+    {
+        role: 'On the Job Training',
+        title: 'Echoverse Digital Marketing Services',
+        period: 'Jan 2026 – Present',
+        location: 'Davao City, Philippines',
+        description: 'Currently an intern student and learning more about the field and contributing to the company.'
     }
 ];
 
@@ -68,7 +75,7 @@ const Experience = () => {
             <div className="grid grid-cols-1 md:grid-cols-1 gap-10">
                 {/* Core Skills Column */}
                 <div>
-                    <h2 className="text-lg font-semibold text-primary dark:text-gray-100 uppercase tracking-wider mb-8">Core Skills</h2>
+                    <h2 className="text-lg font-semibold text-primary dark:text-gray-100 uppercase tracking-wider mb-8">Tech Stack</h2>
                     <div className="space-y-6">
                         {Object.entries(skills).map(([category, items]) => (
                             <div key={category}>
