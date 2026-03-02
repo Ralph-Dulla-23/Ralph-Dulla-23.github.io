@@ -19,7 +19,7 @@ const books = [
     },
     {
         coverId: 15155801, title: 'Spectacular', author: 'Stephanie Garber',
-        progress: 40, status: 'reading', rating: 5, favorite: true,
+        progress: 40, status: 'completed', rating: 5, favorite: true,
         genres: ['Fantasy', 'Romance'],
     },
     // Stephanie Garber - Once Upon a Broken Heart series (UK covers)
@@ -41,7 +41,7 @@ const books = [
     // Holly Black - Folk of the Air (to be read)
     {
         coverId: 8361789, title: 'The Cruel Prince', author: 'Holly Black',
-        progress: 0, status: 'want-to-read', rating: null, favorite: false,
+        progress: 0, status: 'reading', rating: null, favorite: false,
         genres: ['Fantasy', 'Romance'],
     },
     {
@@ -101,7 +101,7 @@ const books = [
     // Pierce Brown
     {
         coverId: 7316188, title: 'Red Rising', author: 'Pierce Brown',
-        progress: 0, status: 'want-to-read', rating: null, favorite: false,
+        progress: 0, status: 'dropped', rating: null, favorite: false,
         genres: ['Sci-Fi', 'Fantasy'],
     },
     // Abby Jimenez
@@ -119,7 +119,7 @@ const books = [
     // Jenna Evans Welch
     {
         coverId: 8074552, title: 'Love & Gelato', author: 'Jenna Evans Welch',
-        progress: 100, status: 'completed', rating: 5, favorite: false,
+        progress: 100, status: 'completed', rating: 5, favorite: true,
         genres: ['Romance', 'Young Adult'],
     },
     // Ann Liang
@@ -140,13 +140,29 @@ const books = [
         progress: 100, status: 'completed', rating: 5, favorite: false,
         genres: ['Romance', 'Contemporary'],
     },
-    // Unknown cover
     {
-        coverId: null, title: "Don't Be In Love", author: 'Unknown',
-        progress: 0, status: 'want-to-read', rating: null, favorite: false,
-        genres: ['Romance'],
+        coverId: null, title: "Don't Be In Love", author: 'Liana Cincotti',
+        progress: 100, status: 'completed', rating: 5, favorite: true,
+        genres: ['Romance', 'Contemporary'],
     },
 ];
+
+// Add original index to preserve reverse chronological order
+books.forEach((b, i) => b._originalIndex = i);
+
+books.sort((a, b) => {
+    // Both are reading: sort by original index reversed
+    if (a.status === 'reading' && b.status === 'reading') {
+        return b._originalIndex - a._originalIndex;
+    }
+    // Only A is reading: A comes first
+    if (a.status === 'reading') return -1;
+    // Only B is reading: B comes first
+    if (b.status === 'reading') return 1;
+
+    // Neither is reading: sort by original index reversed
+    return b._originalIndex - a._originalIndex;
+});
 
 export default books;
 
@@ -155,6 +171,7 @@ export const statusConfig = {
     'completed': { label: 'Completed', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', barColor: 'bg-green-500' },
     'reading': { label: 'Reading', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', barColor: 'bg-blue-500' },
     'want-to-read': { label: 'To Read', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', barColor: 'bg-gray-300 dark:bg-gray-600' },
+    'dropped': { label: 'Dropped', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', barColor: 'bg-red-500' },
 };
 
 export const allGenres = [...new Set(books.flatMap(b => b.genres))].sort();

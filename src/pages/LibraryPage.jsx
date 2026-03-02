@@ -427,6 +427,7 @@ const LibraryPage = () => {
                             { key: 'reading', label: 'Reading' },
                             { key: 'completed', label: 'Done' },
                             { key: 'want-to-read', label: 'To Read' },
+                            { key: 'dropped', label: 'Dropped' },
                             { key: 'favorites', label: 'Faves' },
                         ].map(f => (
                             <button

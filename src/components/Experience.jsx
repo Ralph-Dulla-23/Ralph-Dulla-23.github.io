@@ -4,7 +4,7 @@ import {
     SiPython, SiDart, SiJavascript, SiMysql,
     SiNodedotjs, SiFirebase,
     SiGit, SiGithub,
-    SiReact, SiTailwindcss, SiFlutter, SiFlask
+    SiReact, SiTailwindcss, SiFlutter, SiFlask, SiNextdotjs
 } from 'react-icons/si';
 
 import { FaJava } from "react-icons/fa";
@@ -17,19 +17,20 @@ const skills = {
         { name: 'Java', icon: FaJava, color: 'text-red-500' },
         { name: 'Dart', icon: SiDart, color: 'text-blue-400' },
         { name: 'JavaScript', icon: SiJavascript, color: 'text-yellow-400' },
-        { name: 'SQL', icon: SiMysql, color: 'text-blue-600' }
+        { name: 'SQL', icon: SiMysql, color: 'text-blue-600' },
+        { name: 'NextJS', icon: SiNextdotjs, color: 'text-black' }
     ],
     Backend: [
         { name: 'Node.js', icon: SiNodedotjs, color: 'text-green-500' },
         { name: 'Firebase', icon: SiFirebase, color: 'text-orange-500' },
-        { name: 'Flask', icon: SiFlask, color: 'text-white' }
+        { name: 'Flask', icon: SiFlask, color: 'text-black' }
     ],
     Tools: [
         { name: 'VS Code', icon: VscCode, color: 'text-blue-500' },
         { name: 'Git', icon: SiGit, color: 'text-orange-600' },
         { name: 'Android Studio', icon: BiLogoAndroid, color: 'text-green-400' },
         { name: 'Xampp', icon: VscTerminal, color: 'text-orange-400' },
-        { name: 'GitHub', icon: SiGithub, color: 'text-white' }
+        { name: 'GitHub', icon: SiGithub, color: 'text-black' }
     ],
     Frameworks: [
         { name: 'React', icon: SiReact, color: 'text-cyan-400' },
