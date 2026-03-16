@@ -41,17 +41,17 @@ const books = [
     // Holly Black - Folk of the Air (to be read)
     {
         coverId: 8361789, title: 'The Cruel Prince', author: 'Holly Black',
-        progress: 0, status: 'reading', rating: null, favorite: false,
+        progress: 0, status: 'completed', rating: null, favorite: false,
         genres: ['Fantasy', 'Romance'],
     },
     {
         coverId: 8361788, title: 'The Wicked King', author: 'Holly Black',
-        progress: 0, status: 'want-to-read', rating: null, favorite: false,
+        progress: 0, status: 'completed', rating: null, favorite: false,
         genres: ['Fantasy', 'Romance'],
     },
     {
         coverId: 9146990, title: 'The Queen of Nothing', author: 'Holly Black',
-        progress: 0, status: 'want-to-read', rating: null, favorite: false,
+        progress: 0, status: 'reading', rating: null, favorite: false,
         genres: ['Fantasy', 'Romance'],
     },
     // Emily Henry

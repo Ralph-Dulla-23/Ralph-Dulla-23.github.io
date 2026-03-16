@@ -15,7 +15,7 @@ const projects = [
         description: 'Built a web-based clinical decision support system that predicts HIV seroconversion risk using ML models (SVM, XGBoost) achieving up to 97% accuracy. Features a Flask application for healthcare workers to input patient data, generate intervention recommendations, and view encrypted analytics dashboards — all compliant with the HIV Policy Act and Data Privacy Act.',
         github: 'https://github.com/Ralph-Dulla-23/PReDiCT',
         isPrivate: true,
-        demo: 'delete my project', // Add deployed link here
+        demo: 'predict-wheat.vercel.app', // Add deployed link here
         tags: ['Python', 'Flask', 'React', 'Firebase']
     },
     {
@@ -23,7 +23,7 @@ const projects = [
         description: 'Developed a role-based web application designed to streamline student counseling processes.',
         github: 'https://github.com/Ralph-Dulla-23/CMSW',
         isPrivate: false,
-        demo: '',
+        demo: 'https://modern-cms-one.vercel.app',
         tags: ['Tailwind', 'JavaScript', 'HTML', 'Firebase']
     },
     {
