@@ -5,16 +5,22 @@ const About = () => {
     const animRef = useScrollAnimation();
 
     return (
-        <section id="about" className="py-12 border-b border-border dark:border-gray-800 space-y-6" ref={animRef} data-animate>
+        <section id="about" className="py-6 border-b border-border dark:border-gray-800 space-y-6" ref={animRef} data-animate>
             <h2 className="text-lg font-display font-semibold text-primary dark:text-gray-100 uppercase tracking-wider">About</h2>
 
-            <div className="prose prose-neutral max-w-none text-secondary dark:text-gray-400 leading-relaxed space-y-4">
+            <div className="prose prose-neutral max-w-none text-secondary dark:text-gray-800 leading-relaxed space-y-4">
                 <p>
-                    Hi, I'm Ralph. An Undergraduate Computer Science student passionate about the world in Technology.
-                    I love exploring the world of coding and building whatever I imagine.
+                    Hi, I'm <b>Ralph</b> — a <b>Computer Science graduate</b> who loves building things and figuring out how they work.
+                    I lean heavily on <b>AI</b> as part of how I code: not as a shortcut, but as a way to move faster,
+                    think sharper, and tackle problems I'd otherwise spend days on.
                 </p>
                 <p>
-                    Beyond coding, I enjoy<b> gaming</b>, <b>watching movies</b>, and <b>listening to music</b>, I also enjoy <b>reading books</b> and I just started collecting books
+                    On the frontend side, I enjoy designing in <b>Figma</b> before touching code —
+                    getting the layout and feel right first makes the build a lot smoother.
+                </p>
+                <p>
+                    Outside of code, I <b>game</b>, watch <b>movies</b>, and listen to way too much <b>music</b>.
+                    I also just got into <b>collecting books</b> — turns out reading is pretty good when you're not staring at a screen.
                 </p>
             </div>
         </section>

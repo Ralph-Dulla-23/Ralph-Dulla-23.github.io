@@ -1,11 +1,13 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
 import books, { statusConfig } from '../data/books';
+import Lenis from 'lenis';
+import { Link } from 'react-router-dom';
+import {lenisRef} from '../App';
 
 const Library = () => {
     const animRef = useScrollAnimation();
     const carouselRef = useRef(null);
-
     const readingCount = books.filter(b => b.status === 'reading').length;
 
     const scroll = (direction) => {
@@ -21,20 +23,25 @@ const Library = () => {
                 <h2 className="text-lg font-display font-semibold text-primary dark:text-gray-100 uppercase tracking-wider">
                     Library
                 </h2>
-                <a
-                    href="#/library"
+                <Link
+                    to="/library"
+                    onClick={() => {
+                        if (lenisRef.current) {
+                            lenisRef.current.scrollTo(0, { immediate: true });
+                        } else {
+                            window.scrollTo({ top: 0, behavior: 'instant' });
+                        }
+                    }}
                     className="text-sm font-medium text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 transition-colors cursor-pointer"
                 >
                     View All →
-                </a>
+                </Link>
             </div>
             <p className="text-sm text-secondary dark:text-gray-400 mb-10">
                 {books.length} books · Currently reading {readingCount}
             </p>
 
-            {/* Carousel */}
             <div className="relative group">
-                {/* Left Arrow */}
                 <button
                     onClick={() => scroll('left')}
                     className="absolute left-0 top-[120px] -translate-x-1/2 z-10 w-9 h-9 rounded-full bg-white dark:bg-gray-800 border border-border dark:border-gray-700 shadow-md flex items-center justify-center text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
@@ -45,7 +52,6 @@ const Library = () => {
                     </svg>
                 </button>
 
-                {/* Right Arrow */}
                 <button
                     onClick={() => scroll('right')}
                     className="absolute right-0 top-[120px] translate-x-1/2 z-10 w-9 h-9 rounded-full bg-white dark:bg-gray-800 border border-border dark:border-gray-700 shadow-md flex items-center justify-center text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
@@ -56,7 +62,6 @@ const Library = () => {
                     </svg>
                 </button>
 
-                {/* Book Cards */}
                 <div
                     ref={carouselRef}
                     className="flex gap-5 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2"
@@ -69,7 +74,6 @@ const Library = () => {
                                 key={index}
                                 className="flex-shrink-0 w-[180px] snap-start cursor-pointer group/card transition-transform duration-200 hover:-translate-y-1"
                             >
-                                {/* Cover */}
                                 <div className="relative w-[180px] h-[260px] rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow mb-3 bg-gray-100 dark:bg-gray-800">
                                     {book.coverId ? (
                                         <img
@@ -91,13 +95,11 @@ const Library = () => {
                                             <span className="text-xs text-secondary dark:text-gray-500 text-center px-2 font-medium">{book.title}</span>
                                         </div>
                                     )}
-                                    {/* Status Badge */}
                                     <span className={`absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${config.color}`}>
                                         {config.label}
                                     </span>
                                 </div>
 
-                                {/* Info */}
                                 <p className="text-sm font-semibold text-primary dark:text-gray-100 truncate">
                                     {book.title}
                                 </p>
@@ -105,7 +107,6 @@ const Library = () => {
                                     {book.author}
                                 </p>
 
-                                {/* Progress Bar */}
                                 <div className="mt-2 h-[3px] bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                                     <div
                                         className={`h-full rounded-full transition-all ${config.barColor}`}
@@ -121,7 +122,6 @@ const Library = () => {
                 </div>
             </div>
 
-            {/* Hide scrollbar */}
             <style>{`
                 [class*="overflow-x-auto"]::-webkit-scrollbar { display: none; }
             `}</style>

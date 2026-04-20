@@ -11,7 +11,7 @@ const Hero = () => {
     };
 
     return (
-        <section id="hero" className="pb-16 pt-8 border-b border-border dark:border-gray-800" ref={animRef} data-animate>
+        <section id="hero" className="pb-8 pt-6 border-b border-border dark:border-gray-800" ref={animRef} data-animate>
             <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
                 <div className="relative">
                     <div className="w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden ring-2 ring-border dark:ring-gray-700 shadow-sm">

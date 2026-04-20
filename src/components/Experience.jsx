@@ -4,7 +4,7 @@ import {
     SiPython, SiDart, SiJavascript, SiMysql,
     SiNodedotjs, SiFirebase,
     SiGit, SiGithub,
-    SiReact, SiTailwindcss, SiFlutter, SiFlask, SiNextdotjs
+    SiReact, SiTailwindcss, SiFlutter, SiFlask, SiNextdotjs, SiTypescript, SiFigma
 } from 'react-icons/si';
 
 import { FaJava } from "react-icons/fa";
@@ -17,29 +17,44 @@ const skills = {
         { name: 'Java', icon: FaJava, color: 'text-red-500' },
         { name: 'Dart', icon: SiDart, color: 'text-blue-400' },
         { name: 'JavaScript', icon: SiJavascript, color: 'text-yellow-400' },
+        { name: 'TypeScript', icon: SiTypescript, color: 'text-blue-600' },
         { name: 'SQL', icon: SiMysql, color: 'text-blue-600' },
-        { name: 'NextJS', icon: SiNextdotjs, color: 'text-black' }
-    ],
-    Backend: [
-        { name: 'Node.js', icon: SiNodedotjs, color: 'text-green-500' },
-        { name: 'Firebase', icon: SiFirebase, color: 'text-orange-500' },
-        { name: 'Flask', icon: SiFlask, color: 'text-black' }
-    ],
-    Tools: [
-        { name: 'VS Code', icon: VscCode, color: 'text-blue-500' },
-        { name: 'Git', icon: SiGit, color: 'text-orange-600' },
-        { name: 'Android Studio', icon: BiLogoAndroid, color: 'text-green-400' },
-        { name: 'Xampp', icon: VscTerminal, color: 'text-orange-400' },
-        { name: 'GitHub', icon: SiGithub, color: 'text-black' }
     ],
     Frameworks: [
+        { name: 'Next.js', icon: SiNextdotjs, color: 'text-black dark:text-white' },
         { name: 'React', icon: SiReact, color: 'text-cyan-400' },
-        { name: 'Tailwind', icon: SiTailwindcss, color: 'text-cyan-500' },
-        { name: 'Flutter', icon: SiFlutter, color: 'text-blue-400' }
-    ]
+        { name: 'Tailwind CSS',icon: SiTailwindcss, color: 'text-cyan-500'   },
+        { name: 'Flutter',     icon: SiFlutter,     color: 'text-blue-400'   },
+    ],
+    Backend: [
+        { name: 'Node.js',     icon: SiNodedotjs,   color: 'text-green-500'  },
+        { name: 'Firebase',    icon: SiFirebase,    color: 'text-orange-500' },
+        { name: 'Flask',       icon: SiFlask,       color: 'text-black dark:text-white' },
+    ],
+    Tools: [
+        { name: 'VS Code',     icon: VscCode,       color: 'text-blue-500'   },
+        { name: 'Git',         icon: SiGit,         color: 'text-orange-600' },
+        { name: 'GitHub',      icon: SiGithub,      color: 'text-black dark:text-white' },
+        { name: 'Android Studio', icon: BiLogoAndroid, color: 'text-green-400' },
+        { name: 'Figma',       icon: SiFigma,       color: 'text-pink-500'   },
+    ],
 };
 
 const experience = [
+    {
+        role: 'University of Immaculate Conception',
+        title: 'Bachelor of Science in Computer Science',
+        period: 'July 2022 – April 2026',
+        location: 'Davao City, Philippines',
+        description: 'Graduated with a degree in Computer Science, building a foundation in software development, problem solving, and systems thinking.'
+    },
+    {
+        role: 'Echoverse Digital Marketing Services',
+        title: 'On the Job Training',
+        period: 'Jan 2026 – March 2026',
+        location: 'Davao City, Philippines',
+        description: 'Contributed to real agency projects as a developer — built and maintained the company website, worked on chatbot automations, and integrated tracking tools like Meta Pixel. Gained hands-on experience shipping actual work in a live business environment.'
+    },
     {
         role: 'Virtual Initiative for Building Engagement (VIBE)',
         title: 'Core Member',
@@ -54,20 +69,8 @@ const experience = [
         location: 'Davao City, Philippines',
         description: 'Responsible for safeguarding organizational properties and assisting fellow members with various tasks.'
     },
-    {
-        role: 'University of Immaculate Conception',
-        title: 'Bachelor of Science in Computer Science',
-        period: 'July 2022 – Present',
-        location: 'Davao City, Philippines',
-        description: 'Undergraduate student.'
-    },
-    {
-        role: 'On the Job Training',
-        title: 'Echoverse Digital Marketing Services',
-        period: 'Jan 2026 – Present',
-        location: 'Davao City, Philippines',
-        description: 'Currently an intern, gaining hands-on experience in digital marketing while contributing to company projects.'
-    }
+    
+    
 ];
 
 const Experience = () => {
@@ -75,7 +78,7 @@ const Experience = () => {
     const timelineRef = useScrollAnimation();
 
     return (
-        <section id="experience" className="py-12 border-b border-border dark:border-gray-800">
+        <section id="experience" className="py-8 border-b border-border dark:border-gray-800">
             <div className="grid grid-cols-1 md:grid-cols-1 gap-10">
                 {/* Core Skills Column */}
                 <div ref={skillsRef} data-animate>

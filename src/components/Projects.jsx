@@ -40,7 +40,7 @@ const Projects = () => {
     const animRef = useScrollAnimation();
 
     return (
-        <section id="projects" className="py-12 border-b border-border dark:border-gray-800" ref={animRef} data-animate>
+        <section id="projects" className="py-8 border-b border-border dark:border-gray-800" ref={animRef} data-animate>
             <h2 className="text-lg font-display font-semibold text-primary dark:text-gray-100 uppercase tracking-wider mb-8">Projects</h2>
 
             <div className="grid grid-cols-1 gap-6">

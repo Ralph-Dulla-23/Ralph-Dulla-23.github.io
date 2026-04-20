@@ -29,7 +29,6 @@
     @apply bg-background text-primary font-sans antialiased dark:bg-gray-950 dark:text-gray-100 transition-colors duration-300;
   }
 
-  /* Focus-visible for accessibility */
   *:focus-visible {
     @apply outline-2 outline-offset-2 outline-primary/50 dark:outline-gray-400;
   }
@@ -44,11 +43,25 @@
   @apply text-gray-400;
 }
 
-/* Scroll-triggered animation system */
 [data-animate] {
   opacity: 0;
   transform: translateY(24px);
   transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cursor-blink {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background-color: currentColor;
+  margin-left: 2px;
+  vertical-align: middle;
+  animation: blink 1s step-end infinite;
 }
 
 [data-animate].is-visible {

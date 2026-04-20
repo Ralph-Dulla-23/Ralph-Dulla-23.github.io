@@ -51,7 +51,7 @@ const books = [
     },
     {
         coverId: 9146990, title: 'The Queen of Nothing', author: 'Holly Black',
-        progress: 0, status: 'reading', rating: null, favorite: false,
+        progress: 100, status: 'completed', rating: 5, favorite: false,
         genres: ['Fantasy', 'Romance'],
     },
     // Emily Henry
@@ -122,6 +122,11 @@ const books = [
         progress: 100, status: 'completed', rating: 5, favorite: true,
         genres: ['Romance', 'Young Adult'],
     },
+    {
+        coverId: 9227891, title: 'Love & Luck', author: 'Jenna Evans Welch',
+        progress: 100, status: 'completed', rating: 4.5, favorite: false,
+        genres: ['Romance', 'Young Adult'],
+    },
     // Ann Liang
     {
         coverId: 12954164, title: 'If You Could See the Sun', author: 'Ann Liang',
@@ -144,6 +149,17 @@ const books = [
         coverId: null, title: "Don't Be In Love", author: 'Liana Cincotti',
         progress: 100, status: 'completed', rating: 5, favorite: true,
         genres: ['Romance', 'Contemporary'],
+    },
+    // Rebecca Ross - Letters of Enchantment series
+    {
+        coverId: 13268161, title: 'Divine Rivals', author: 'Rebecca Ross',
+        progress: 25, status: 'reading', rating: null, favorite: false,
+        genres: ['Fantasy', 'Romance', 'Historical'],
+    },
+    {
+        coverId: 14572083, title: 'Ruthless Vows', author: 'Rebecca Ross',
+        progress: 0, status: 'want-to-read', rating: null, favorite: false,
+        genres: ['Fantasy', 'Romance', 'Historical'],
     },
 ];
 
