@@ -19,6 +19,11 @@ const Hero = () => {
                             src="/assets/images/PFP.png"
                             alt="Ralph Dulla's profile photo"
                             className="w-full h-full object-cover"
+                            width="128"
+                            height="128"
+                            fetchpriority="high"
+                            loading="eager"
+                            decoding="sync"
                             onError={(e) => {
                                 e.target.src = 'https://ui-avatars.com/api/?name=Ralph+Dulla&background=random';
                             }}

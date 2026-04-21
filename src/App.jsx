@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import Lenis from 'lenis';
 import Layout from './components/Layout';
@@ -9,8 +9,9 @@ import Projects from './components/Projects';
 import Certificates from './components/Certificates';
 import Library from './components/Library';
 import Contact from './components/Contact';
-import LibraryPage from './pages/LibraryPage';
 import { useLocation } from 'react-router-dom';
+
+const LibraryPage = lazy(() => import('./pages/LibraryPage'));
 
 export const lenisRef = { current: null };
 
@@ -72,7 +73,14 @@ function App() {
       <ScrollToTop />
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/library" element={<LibraryPage />} />
+        <Route
+          path="/library"
+          element={
+            <Suspense fallback={null}>
+              <LibraryPage />
+            </Suspense>
+          }
+        />
       </Routes>
     </HashRouter>
   );
