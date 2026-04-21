@@ -16,7 +16,7 @@ const Hero = () => {
                 <div className="relative">
                     <div className="w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden ring-2 ring-border dark:ring-gray-700 shadow-sm">
                         <img
-                            src="/assets/images/PFP.png"
+                            src="/assets/images/PFP.webp"
                             alt="Ralph Dulla's profile photo"
                             className="w-full h-full object-cover"
                             width="128"
