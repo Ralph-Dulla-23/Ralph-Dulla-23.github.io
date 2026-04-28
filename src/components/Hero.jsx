@@ -14,7 +14,7 @@ const Hero = () => {
         <section id="hero" className="pb-8 pt-6 border-b border-border dark:border-gray-800" ref={animRef} data-animate>
             <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
                 <div className="relative">
-                    <div className="w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden ring-2 ring-border dark:ring-gray-700 shadow-sm">
+                    <div className="w-24 h-24 md:w-32 md:h-32 rounded-[25%] overflow-hidden ring-2 ring-border dark:ring-gray-700 shadow-sm">
                         <img
                             src="/assets/images/PFP.webp"
                             alt="Ralph Dulla's profile photo"
@@ -60,6 +60,19 @@ const Hero = () => {
                         >
                             View My Work ↓
                         </button>
+
+                        <span className="w-px h-4 bg-border dark:bg-gray-700"></span>
+
+                        <a
+                            href="/assets/RalphDulla_Resume.pdf"
+                            download
+                            className="text-sm text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Download CV
+                        </a>
                     </div>
                 </div>
             </div>

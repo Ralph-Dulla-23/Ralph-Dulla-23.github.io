@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
 import {
     SiPython, SiDart, SiJavascript, SiMysql,
@@ -11,32 +12,53 @@ import { FaJava } from "react-icons/fa";
 import { VscCode, VscTerminal } from "react-icons/vsc";
 import { BiLogoAndroid } from "react-icons/bi";
 
+const TECH_COLORS = {
+    python: 'text-blue-500',
+    java: 'text-red-500',
+    dart: 'text-blue-400',
+    javascript: 'text-yellow-400',
+    typescript: 'text-blue-600',
+    mysql: 'text-blue-600',
+    nextjs: 'text-black dark:text-white',
+    react: 'text-cyan-400',
+    tailwind: 'text-cyan-500',
+    flutter: 'text-blue-400',
+    nodejs: 'text-green-500',
+    firebase: 'text-orange-500',
+    flask: 'text-black dark:text-white',
+    vscode: 'text-blue-500',
+    git: 'text-orange-600',
+    github: 'text-black dark:text-white',
+    android: 'text-green-400',
+    figma: 'text-pink-500',
+};
+
 const skills = {
     Languages: [
-        { name: 'Python', icon: SiPython, color: 'text-blue-500' },
-        { name: 'Java', icon: FaJava, color: 'text-red-500' },
-        { name: 'Dart', icon: SiDart, color: 'text-blue-400' },
-        { name: 'JavaScript', icon: SiJavascript, color: 'text-yellow-400' },
-        { name: 'TypeScript', icon: SiTypescript, color: 'text-blue-600' },
-        { name: 'SQL', icon: SiMysql, color: 'text-blue-600' },
+        { name: 'Python', icon: SiPython, color: TECH_COLORS.python },
+        { name: 'Java', icon: FaJava, color: TECH_COLORS.java },
+        { name: 'Dart', icon: SiDart, color: TECH_COLORS.dart },
+        { name: 'JavaScript', icon: SiJavascript, color: TECH_COLORS.javascript },
+        { name: 'TypeScript', icon: SiTypescript, color: TECH_COLORS.typescript },
+        { name: 'SQL', icon: SiMysql, color: TECH_COLORS.mysql },
     ],
     Frameworks: [
-        { name: 'Next.js', icon: SiNextdotjs, color: 'text-black dark:text-white' },
-        { name: 'React', icon: SiReact, color: 'text-cyan-400' },
-        { name: 'Tailwind CSS',icon: SiTailwindcss, color: 'text-cyan-500'   },
-        { name: 'Flutter',     icon: SiFlutter,     color: 'text-blue-400'   },
+        { name: 'Next.js', icon: SiNextdotjs, color: TECH_COLORS.nextjs },
+        { name: 'React', icon: SiReact, color: TECH_COLORS.react },
+        { name: 'Tailwind CSS',icon: SiTailwindcss, color: TECH_COLORS.tailwind   },
+        { name: 'Flutter',     icon: SiFlutter,     color: TECH_COLORS.flutter   },
     ],
     Backend: [
-        { name: 'Node.js',     icon: SiNodedotjs,   color: 'text-green-500'  },
-        { name: 'Firebase',    icon: SiFirebase,    color: 'text-orange-500' },
-        { name: 'Flask',       icon: SiFlask,       color: 'text-black dark:text-white' },
+        { name: 'Node.js',     icon: SiNodedotjs,   color: TECH_COLORS.nodejs  },
+        { name: 'Firebase',    icon: SiFirebase,    color: TECH_COLORS.firebase },
+        { name: 'Flask',       icon: SiFlask,       color: TECH_COLORS.flask },
     ],
     Tools: [
-        { name: 'VS Code',     icon: VscCode,       color: 'text-blue-500'   },
-        { name: 'Git',         icon: SiGit,         color: 'text-orange-600' },
-        { name: 'GitHub',      icon: SiGithub,      color: 'text-black dark:text-white' },
-        { name: 'Android Studio', icon: BiLogoAndroid, color: 'text-green-400' },
-        { name: 'Figma',       icon: SiFigma,       color: 'text-pink-500'   },
+        { name: 'VS Code',     icon: VscCode,       color: TECH_COLORS.vscode   },
+        { name: 'Git',         icon: SiGit,         color: TECH_COLORS.git },
+        { name: 'GitHub',      icon: SiGithub,      color: TECH_COLORS.github },
+        { name: 'Android Studio', icon: BiLogoAndroid, color: TECH_COLORS.android },
+        { name: 'Figma',       icon: SiFigma,       color: TECH_COLORS.figma   },
     ],
 };
 

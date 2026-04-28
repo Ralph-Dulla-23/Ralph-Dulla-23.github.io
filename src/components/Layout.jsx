@@ -1,56 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { BsSun, BsMoonStars } from 'react-icons/bs';
-
-
-const Typewriter = ({ labels, typeSpeed = 100, backSpeed = 50, delay = 2000 }) => {
-    const [displayText, setDisplayText] = useState('');
-    const [labelIndex, setLabelIndex] = useState(0);
-    const [isDeleting, setIsDeleting] = useState(false);
-    const [isPaused, setIsPaused] = useState(false);
-
-    useEffect(() => {
-        const currentLabel = labels[labelIndex];
-        
-        // Determine the speed based on current action
-        let speed = isDeleting ? backSpeed : typeSpeed;
-        if (isPaused) speed = delay;
-
-        const handleTick = () => {
-            if (isPaused) {
-                setIsPaused(false);
-                setIsDeleting(true);
-                return;
-            }
-
-            if (!isDeleting) {
-                const nextText = currentLabel.substring(0, displayText.length + 1);
-                setDisplayText(nextText);
-
-                if (nextText === currentLabel) {
-                    setIsPaused(true);
-                }
-            } else {
-                const nextText = currentLabel.substring(0, displayText.length - 1);
-                setDisplayText(nextText);
-
-                if (nextText === '') {
-                    setIsDeleting(false);
-                    setLabelIndex((prev) => (prev + 1) % labels.length);
-                }
-            }
-        };
-
-        const timeout = setTimeout(handleTick, speed);
-        return () => clearTimeout(timeout);
-    }, [displayText, isDeleting, isPaused, labelIndex, labels, typeSpeed, backSpeed, delay]);
-
-    return (
-        <span className="inline-flex items-center">
-            {displayText}
-            <span className="ml-1 border-r-2 border-current h-5 animate-pulse" aria-hidden="true"></span>
-        </span>
-    );
-};
+import { GooeyFilter } from '@/components/ui/gooey-filter';
+import { PixelTrail } from '@/components/ui/pixel-trail';
+import { useScreenSize } from '@/hooks/use-screen-size';
+import Typewriter from './ui/typewriter';
 
 const navLinks = [
     { label: 'About', href: '#about' },
@@ -61,6 +15,13 @@ const navLinks = [
     { label: 'Contact', href: '#contact' },
 ];
 
+/**
+ * Main Layout component that provides the theme, navigation, and background effects.
+ * 
+ * @component
+ * @param {Object} props
+ * @param {React.ReactNode} props.children - Child components to render in the main content area
+ */
 const Layout = ({ children }) => {
     const [darkMode, setDarkMode] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -71,6 +32,7 @@ const Layout = ({ children }) => {
     });
 
     const [scrolled, setScrolled] = useState(false);
+    const screenSize = useScreenSize();
 
     useEffect(() => {
         const root = window.document.documentElement;
@@ -99,6 +61,23 @@ const Layout = ({ children }) => {
 
     return (
         <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-gray-950' : 'bg-background'}`}>
+            {/* Gooey Pixel Trail — background sides only, hidden on small screens */}
+            {!screenSize.lessThan('md') && (
+                <>
+                    <GooeyFilter id="gooey-bg" strength={5} />
+                    <div
+                        className="fixed inset-0 z-0 pointer-events-auto"
+                        style={{ filter: 'url(#gooey-bg)' }}
+                    >
+                        <PixelTrail
+                            pixelSize={screenSize.greaterThanOrEqual('xl') ? 32 : 24}
+                            fadeDuration={500}
+                            delay={0}
+                            pixelColor={darkMode ? "#ffffff" : "#1f2937"}
+                        />
+                    </div>
+                </>
+            )}
             {/* Floating Navigation */}
             <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
                 ? 'bg-white/80 dark:bg-gray-950/80 backdrop-blur-md shadow-sm border-b border-border/50 dark:border-gray-800/50'
@@ -138,11 +117,15 @@ const Layout = ({ children }) => {
                 </div>
             </nav>
 
-            <main className="max-w-3xl mx-auto px-6 pt-20 pb-12 md:pt-20 md:pb-2 border-x border-dashed border-border dark:border-gray-800 min-h-screen bg-surface/50 dark:bg-gray-900/50 backdrop-blur-sm shadow-sm ring-1 ring-black/5 dark:ring-white/5">
+            <main className="relative z-10 max-w-3xl mx-auto px-6 pt-20 pb-12 md:pt-20 md:pb-2 border-x border-dashed border-border dark:border-gray-800 min-h-screen bg-surface/50 dark:bg-gray-900/50 backdrop-blur-sm shadow-sm ring-1 ring-black/5 dark:ring-white/5">
                 {children}
             </main>
         </div>
     );
+};
+
+Layout.propTypes = {
+    children: PropTypes.node.isRequired,
 };
 
 export default Layout;

@@ -3,11 +3,18 @@ import { useScrollAnimation } from '../hooks/useScrollAnimation';
 
 const projects = [
     {
+        title: 'TonyWrites — Copywriter Portfolio',
+        description: 'Built a conversion-focused portfolio website for Franz Abadia (TonyWrites), a copywriter specializing in psychology-driven copy and strategic brand narratives. Features a clean editorial layout designed to showcase writing samples and drive client inquiries.',
+        demo: 'https://tonywrites.work',
+        tags: ['Client Project', 'React', 'Tailwind CSS', 'Vercel'],
+        isClient: true,
+    },
+    {
         title: 'Echoverse Digital Marketing',
         description: 'Built a premium agency website for Echoverse Digital Marketing — a full-stack, cinematic web experience featuring immersive animated backgrounds, adaptive video streaming, interactive case studies, and a streamlined client booking flow designed to convert high-value leads.',
         github: 'https://github.com/Ralph-Dulla-23/Echoverse',
         isPrivate: true,
-        demo: 'https://www.echoversedigital.marketing', // Add deployed link here
+        demo: 'https://www.echoversedigital.marketing',
         tags: ['NextJS', 'Tailwind CSS', 'Framer Motion, Vercel']
     },
     {
