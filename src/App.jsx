@@ -23,7 +23,7 @@ function ScrollToTop() {
   return null;
 }
 
-function HomePage() {
+function HomePage({ darkMode }) {
   useEffect(() => {
     const lenis = new Lenis({
       duration: 1.2,
@@ -46,7 +46,7 @@ function HomePage() {
   }, []);
 
   return (
-    <Layout>
+    <Layout darkMode={darkMode}>
       <Hero />
       <About />
       <Experience />
@@ -59,25 +59,29 @@ function HomePage() {
 }
 
 function App() {
-  const [dark, setDark] = useState(
-    () => localStorage.getItem('theme') === 'dark'
-  );
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+        return localStorage.getItem('theme') === 'dark' ||
+            (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return false;
+  });
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    localStorage.setItem('theme', dark ? 'dark' : 'light');
-  }, [dark]);
+    document.documentElement.classList.toggle('dark', darkMode);
+    localStorage.setItem('theme', darkMode ? 'dark' : 'light');
+  }, [darkMode]);
 
   return (
     <HashRouter>
       <ScrollToTop />
       <Routes>
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<HomePage darkMode={darkMode} setDarkMode={setDarkMode} />} />
         <Route
           path="/library"
           element={
             <Suspense fallback={null}>
-              <LibraryPage />
+              <LibraryPage darkMode={darkMode} setDarkMode={setDarkMode} />
             </Suspense>
           }
         />

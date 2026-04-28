@@ -21,29 +21,12 @@ const navLinks = [
  * @component
  * @param {Object} props
  * @param {React.ReactNode} props.children - Child components to render in the main content area
+ * @param {boolean} props.darkMode - Current theme state
+ * @param {Function} props.setDarkMode - Function to toggle theme state
  */
-const Layout = ({ children }) => {
-    const [darkMode, setDarkMode] = useState(() => {
-        if (typeof window !== 'undefined') {
-            return localStorage.getItem('theme') === 'dark' ||
-                (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
-        }
-        return false;
-    });
-
+const Layout = ({ children, darkMode, setDarkMode }) => {
     const [scrolled, setScrolled] = useState(false);
     const screenSize = useScreenSize();
-
-    useEffect(() => {
-        const root = window.document.documentElement;
-        if (darkMode) {
-            root.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-        } else {
-            root.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-        }
-    }, [darkMode]);
 
     useEffect(() => {
         const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -126,6 +109,8 @@ const Layout = ({ children }) => {
 
 Layout.propTypes = {
     children: PropTypes.node.isRequired,
+    darkMode: PropTypes.bool.isRequired,
+    setDarkMode: PropTypes.func.isRequired,
 };
 
 export default Layout;

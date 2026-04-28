@@ -14,12 +14,37 @@ const favorites = books.filter(b => b.favorite);
 const avgRating = (books.filter(b => b.rating).reduce((s, b) => s + b.rating, 0) / books.filter(b => b.rating).length).toFixed(1);
 const pctComplete = Math.round((completedBooks.length / books.length) * 100);
 
+import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
+import Lenis from 'lenis';
+import books, { statusConfig, allGenres } from '../data/books';
+import { useScrollAnimation } from '../hooks/useScrollAnimation';
+
+import { Icons } from '../components/library/Icons';
+import BookCard from '../components/library/BookCard';
+import { StatCard, ProgressRing } from '../components/library/Stats';
+import BookModal from '../components/library/BookModal';
+
+const completedBooks = books.filter(b => b.status === 'completed');
+const readingBooks = books.filter(b => b.status === 'reading');
+const favorites = books.filter(b => b.favorite);
+const avgRating = (books.filter(b => b.rating).reduce((s, b) => s + b.rating, 0) / books.filter(b => b.rating).length).toFixed(1);
+const pctComplete = Math.round((completedBooks.length / books.length) * 100);
+
 const authorCounts = {};
 books.forEach(b => { authorCounts[b.author] = (authorCounts[b.author] || 0) + 1; });
 const topAuthors = Object.entries(authorCounts).sort((a, b) => b[1] - a[1]);
 const maxAuthorCount = topAuthors[0]?.[1] || 1;
 
-const LibraryPage = () => {
+/**
+ * LibraryPage component that displays the user's reading collection and stats.
+ * 
+ * @component
+ * @param {Object} props
+ * @param {boolean} props.darkMode - Current theme state
+ * @param {Function} props.setDarkMode - Function to toggle theme state
+ */
+const LibraryPage = ({ darkMode, setDarkMode }) => {
     const [filter, setFilter] = useState('all');
     const [genreFilter, setGenreFilter] = useState('all');
     const [selectedBook, setSelectedBook] = useState(null);
@@ -63,12 +88,25 @@ const LibraryPage = () => {
     };
 
     return (
-        <div className="min-h-screen bg-background dark:bg-gray-950 transition-colors">
+        <div className={`min-h-screen transition-colors ${darkMode ? 'dark bg-gray-950' : 'bg-background'}`}>
             <header className="max-w-4xl mx-auto px-6 pt-10 pb-4" ref={headerRef} data-animate>
-                <a href="/" className="inline-flex items-center gap-1.5 text-sm text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 transition-colors mb-6">
-                    {Icons.chevronLeft()}
-                    Back to Home
-                </a>
+                <div className="flex justify-between items-start mb-6">
+                    <a href="/" className="inline-flex items-center gap-1.5 text-sm text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 transition-colors">
+                        {Icons.chevronLeft()}
+                        Back to Home
+                    </a>
+                    <button
+                        onClick={() => setDarkMode(!darkMode)}
+                        className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-yellow-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all cursor-pointer"
+                        aria-label="Toggle Dark Mode"
+                    >
+                        {darkMode ? (
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3c.132 0 .263 0 .393.007a9 9 0 0011.6 11.6A9 9 0 1112 3z"/></svg>
+                        ) : (
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 5.106a.75.75 0 011.06 0l1.591 1.591a.75.75 0 11-1.06 1.06l-1.591-1.591a.75.75 0 010-1.06zM21.75 12a.75.75 0 01.75.75h2.25a.75.75 0 010-1.5H22.5a.75.75 0 01.75.75zM18.894 18.894a.75.75 0 010 1.06l-1.591 1.591a.75.75 0 11-1.06-1.06l1.591-1.591a.75.75 0 011.06 0zM12 21.75a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V22.5a.75.75 0 01.75-.75zM5.106 18.894a.75.75 0 011.06 0l1.591 1.591a.75.75 0 11-1.06 1.06L5.106 19.954a.75.75 0 010-1.06zM2.25 12a.75.75 0 01.75-.75h2.25a.75.75 0 010 1.5H3a.75.75 0 01-.75-.75zM5.106 5.106a.75.75 0 010 1.06L3.515 7.757a.75.75 0 01-1.06-1.06l1.591-1.591a.75.75 0 011.06 0z"/></svg>
+                        )}
+                    </button>
+                </div>
                 <div className="flex items-center gap-3 mb-1">
                     <span className="text-primary dark:text-gray-100">{Icons.books('w-8 h-8')}</span>
                     <h1 className="text-3xl font-display font-bold text-primary dark:text-gray-100">My Library</h1>
@@ -256,6 +294,11 @@ const LibraryPage = () => {
             <style>{`[class*="overflow-x-auto"]::-webkit-scrollbar { display: none; }`}</style>
         </div>
     );
+};
+
+LibraryPage.propTypes = {
+    darkMode: PropTypes.bool.isRequired,
+    setDarkMode: PropTypes.func.isRequired,
 };
 
 export default LibraryPage;
