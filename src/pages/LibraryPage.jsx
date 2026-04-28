@@ -1,20 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Lenis from 'lenis';
-import books, { statusConfig, allGenres } from '../data/books';
-import { useScrollAnimation } from '../hooks/useScrollAnimation';
-
-import { Icons } from '../components/library/Icons';
-import BookCard from '../components/library/BookCard';
-import { StatCard, ProgressRing } from '../components/library/Stats';
-import BookModal from '../components/library/BookModal';
-
-const completedBooks = books.filter(b => b.status === 'completed');
-const readingBooks = books.filter(b => b.status === 'reading');
-const favorites = books.filter(b => b.favorite);
-const avgRating = (books.filter(b => b.rating).reduce((s, b) => s + b.rating, 0) / books.filter(b => b.rating).length).toFixed(1);
-const pctComplete = Math.round((completedBooks.length / books.length) * 100);
-
-import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import Lenis from 'lenis';
 import books, { statusConfig, allGenres } from '../data/books';
@@ -28,8 +12,8 @@ import BookModal from '../components/library/BookModal';
 const completedBooks = books.filter(b => b.status === 'completed');
 const readingBooks = books.filter(b => b.status === 'reading');
 const favorites = books.filter(b => b.favorite);
-const avgRating = (books.filter(b => b.rating).reduce((s, b) => s + b.rating, 0) / books.filter(b => b.rating).length).toFixed(1);
-const pctComplete = Math.round((completedBooks.length / books.length) * 100);
+const avgRating = (books.filter(b => b.rating).reduce((s, b) => s + b.rating, 0) / (books.filter(b => b.rating).length || 1)).toFixed(1);
+const pctComplete = Math.round((completedBooks.length / (books.length || 1)) * 100);
 
 const authorCounts = {};
 books.forEach(b => { authorCounts[b.author] = (authorCounts[b.author] || 0) + 1; });
