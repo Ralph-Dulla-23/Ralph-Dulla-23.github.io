@@ -23,7 +23,7 @@ function ScrollToTop() {
   return null;
 }
 
-function HomePage({ darkMode }) {
+function HomePage({ darkMode, setDarkMode }) {
   useEffect(() => {
     const lenis = new Lenis({
       duration: 1.2,
@@ -46,7 +46,7 @@ function HomePage({ darkMode }) {
   }, []);
 
   return (
-    <Layout darkMode={darkMode}>
+    <Layout darkMode={darkMode} setDarkMode={setDarkMode}>
       <Hero />
       <About />
       <Experience />
