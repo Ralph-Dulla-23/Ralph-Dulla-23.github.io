@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 import BottomTabs from '../../components/navigation/BottomTabs';
 import { useAuth } from '../../context/AuthContext';
@@ -8,8 +8,10 @@ import {
     watchPublicBooks,
     seedExistingBooks,
     getBookPrivateNotes,
+    syncLocalToCloud,
 } from '../../lib/db';
 import { searchBooks } from '../../lib/openlibrary';
+import { parseBookmoryMarkdown, importBookmoryBooks } from '../../lib/bookmory';
 import ReadingTimerModal from '../../components/books/ReadingTimerModal';
 import {
     BsPlusLg,
@@ -22,6 +24,7 @@ import {
     BsHeartFill,
     BsCloudArrowUp,
     BsCheck2Circle,
+    BsFileEarmarkArrowUp,
 } from 'react-icons/bs';
 
 const statusTabs = [
@@ -64,6 +67,12 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
     // Seeding state
     const [seeding, setSeeding] = useState(false);
     const [seedSuccess, setSeedSuccess] = useState(false);
+
+    // Bookmory import + cloud sync state
+    const importInputRef = useRef(null);
+    const [importing, setImporting] = useState(false);
+    const [syncing, setSyncing] = useState(false);
+    const [importMsg, setImportMsg] = useState(null);
 
     useEffect(() => {
         if (!user) return;
@@ -262,6 +271,64 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
         }
     };
 
+    const reportSync = async (prefix = '') => {
+        const res = await syncLocalToCloud(user.uid);
+        if (res.error) {
+            setImportMsg({
+                type: 'warn',
+                text:
+                    `${prefix}Saved on this device, but NOT synced to Firebase:\n${res.error}\n` +
+                    'Publish the Firestore rules in Firebase Console, then tap "Sync to Cloud".',
+            });
+        } else {
+            setImportMsg({
+                type: 'ok',
+                text: `${prefix}Synced to Firebase: ${res.books} books, ${res.sessions} reading sessions, ${res.games} games.`,
+            });
+        }
+    };
+
+    const handleSync = async () => {
+        setSyncing(true);
+        setImportMsg(null);
+        try {
+            await reportSync();
+        } finally {
+            setSyncing(false);
+        }
+    };
+
+    const handleImportFiles = async (e) => {
+        const files = Array.from(e.target.files || []);
+        e.target.value = '';
+        if (!files.length) return;
+        setImporting(true);
+        setImportMsg({ type: 'ok', text: `Reading ${files.length} file(s)...` });
+        try {
+            const parsed = [];
+            for (const f of files) {
+                const p = parseBookmoryMarkdown(await f.text());
+                if (p) parsed.push(p);
+            }
+            if (!parsed.length) {
+                setImportMsg({ type: 'error', text: 'No Bookmory books found in the selected files. Select the .md files from the export.' });
+                return;
+            }
+            const summary = await importBookmoryBooks(user.uid, parsed, books, (done, total, t) =>
+                setImportMsg({ type: 'ok', text: `Importing ${done}/${total}${t ? `: ${t}` : ''}` })
+            );
+            const head =
+                `Imported ${summary.added} new, updated ${summary.updated}, ${summary.sessions} reading sessions.` +
+                (summary.failed.length ? `\n${summary.failed.length} failed:\n${summary.failed.join('\n')}` : '') +
+                '\n';
+            await reportSync(head);
+        } catch (err) {
+            setImportMsg({ type: 'error', text: `Import failed: ${err.message}` });
+        } finally {
+            setImporting(false);
+        }
+    };
+
     const filtered = books.filter(b => {
         if (filter === 'all') return true;
         return b.status === filter;
@@ -283,14 +350,41 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                     </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    <input
+                        ref={importInputRef}
+                        type="file"
+                        accept=".md,.txt,text/markdown,text/plain"
+                        multiple
+                        className="hidden"
+                        onChange={handleImportFiles}
+                    />
+                    <button
+                        onClick={() => importInputRef.current?.click()}
+                        disabled={importing}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-secondary dark:text-gray-300 hover:text-primary dark:hover:text-gray-100 transition-colors cursor-pointer disabled:opacity-60"
+                        title="Select all the .md files from your Bookmory export"
+                    >
+                        <BsFileEarmarkArrowUp className="w-4 h-4" />
+                        {importing ? 'Importing...' : 'Import Bookmory'}
+                    </button>
+
+                    <button
+                        onClick={handleSync}
+                        disabled={syncing}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-secondary dark:text-gray-300 hover:text-primary dark:hover:text-gray-100 transition-colors cursor-pointer disabled:opacity-60"
+                        title="Push everything saved on this device up to Firebase"
+                    >
+                        <BsCloudArrowUp className="w-4 h-4" />
+                        {syncing ? 'Syncing...' : 'Sync to Cloud'}
+                    </button>
+
                     <button
                         onClick={handleSeed}
                         disabled={seeding}
                         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-secondary dark:text-gray-300 hover:text-primary dark:hover:text-gray-100 transition-colors cursor-pointer"
                         title="Import the 29 hardcoded books from books.js into Firestore"
                     >
-                        <BsCloudArrowUp className="w-4 h-4" />
                         {seeding ? 'Seeding...' : 'Seed Existing (29)'}
                     </button>
 
@@ -308,6 +402,20 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                 <div className="mb-4 p-3 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900/50 rounded-xl text-green-700 dark:text-green-300 text-xs flex items-center gap-2">
                     <BsCheck2Circle className="w-4 h-4" />
                     Successfully seeded 29 books into your live Firestore!
+                </div>
+            )}
+
+            {importMsg && (
+                <div
+                    className={`mb-4 p-3 rounded-xl text-xs whitespace-pre-line border ${
+                        importMsg.type === 'error'
+                            ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300'
+                            : importMsg.type === 'warn'
+                            ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/50 text-amber-800 dark:text-amber-300'
+                            : 'bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-900/50 text-green-700 dark:text-green-300'
+                    }`}
+                >
+                    {importMsg.text}
                 </div>
             )}
 

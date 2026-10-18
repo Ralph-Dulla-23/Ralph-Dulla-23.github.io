@@ -623,7 +623,7 @@ export async function updateBookProgress(uid, bookId, currentPage, pages, status
 export async function addReadingSession(uid, bookId, sessionData = {}) {
     const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
     const { safeBookId } = ensureLocalBook(bookId || sessionData?.bookId);
-    const sessionId = sanitizeId(Date.now(), 'session');
+    const sessionId = sanitizeId(sessionData?.id || Date.now(), 'session');
 
     const minutes = Number(sessionData.minutes) || 0;
     const fromPage = Number(sessionData.fromPage) || 0;
@@ -796,6 +796,76 @@ export async function seedExistingBooks(uid) {
         count++;
     }
     return count;
+}
+
+/**
+ * Pushes everything in the local mirror (books, games, private notes, sessions)
+ * up to Firestore. Unlike the individual save functions, this REPORTS failures
+ * (e.g. permission-denied) so the UI can tell the user the cloud copy is missing.
+ *
+ * @returns {Promise<{books:number, games:number, sessions:number, error:string|null}>}
+ */
+export async function syncLocalToCloud(uid) {
+    const result = { books: 0, games: 0, sessions: 0, error: null };
+    if (!db) {
+        result.error = 'Firebase is not configured.';
+        return result;
+    }
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    const stripLocal = ({ createdAtISO: _c, updatedAtISO: _u, ...rest }) => rest; // eslint-disable-line no-unused-vars
+
+    try {
+        const localBooks = readJson(LS_BOOKS_KEY, {});
+        const bookNotes = readJson(LS_BOOK_NOTES_KEY, {});
+        const sessions = readJson(LS_SESSIONS_KEY, {});
+        for (const [key, book] of Object.entries(localBooks)) {
+            const id = sanitizeId(book?.id || key, 'book');
+            await setDoc(
+                doc(db, 'users', safeUid, 'books', id),
+                { ...stripLocal(book), id, updatedAt: serverTimestamp() },
+                { merge: true }
+            );
+            if (bookNotes[id]) {
+                await setDoc(
+                    doc(db, 'users', safeUid, 'books', id, 'private', 'notes'),
+                    { notes: bookNotes[id], updatedAt: serverTimestamp() },
+                    { merge: true }
+                );
+            }
+            for (const s of Array.isArray(sessions[id]) ? sessions[id] : []) {
+                const sid = sanitizeId(s.id, 'session');
+                await setDoc(
+                    doc(db, 'users', safeUid, 'books', id, 'sessions', sid),
+                    { ...stripLocal(s), id: sid, createdAt: serverTimestamp() },
+                    { merge: true }
+                );
+                result.sessions++;
+            }
+            result.books++;
+        }
+
+        const localGames = readJson(LS_GAMES_KEY, {});
+        const gameNotes = readJson(LS_GAME_NOTES_KEY, {});
+        for (const [key, game] of Object.entries(localGames)) {
+            const id = sanitizeId(game?.id || key, 'game');
+            await setDoc(
+                doc(db, 'users', safeUid, 'games', id),
+                { ...stripLocal(game), id, updatedAt: serverTimestamp() },
+                { merge: true }
+            );
+            if (gameNotes[id]) {
+                await setDoc(
+                    doc(db, 'users', safeUid, 'games', id, 'private', 'notes'),
+                    { review: gameNotes[id], updatedAt: serverTimestamp() },
+                    { merge: true }
+                );
+            }
+            result.games++;
+        }
+    } catch (err) {
+        result.error = err?.code ? `${err.code}: ${err.message}` : err?.message || String(err);
+    }
+    return result;
 }
 
 
