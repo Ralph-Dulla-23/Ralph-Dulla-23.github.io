@@ -19,7 +19,7 @@ const books = [
     },
     {
         coverId: 15155801, title: 'Spectacular', author: 'Stephanie Garber',
-        progress: 40, status: 'completed', rating: 5, favorite: true,
+        progress: 100, status: 'completed', rating: 5, favorite: true,
         genres: ['Fantasy', 'Romance'],
     },
     // Stephanie Garber - Once Upon a Broken Heart series (UK covers)
@@ -41,12 +41,12 @@ const books = [
     // Holly Black - Folk of the Air (to be read)
     {
         coverId: 8361789, title: 'The Cruel Prince', author: 'Holly Black',
-        progress: 0, status: 'completed', rating: null, favorite: false,
+        progress: 0, status: 'want-to-read', rating: null, favorite: false,
         genres: ['Fantasy', 'Romance'],
     },
     {
         coverId: 8361788, title: 'The Wicked King', author: 'Holly Black',
-        progress: 0, status: 'completed', rating: null, favorite: false,
+        progress: 0, status: 'want-to-read', rating: null, favorite: false,
         genres: ['Fantasy', 'Romance'],
     },
     {

@@ -16,16 +16,23 @@ export const Stars = ({ rating }) => {
 };
 
 const BookCard = ({ book, onClick }) => {
-    const config = statusConfig[book.status];
+    const config = statusConfig[book.status] || {
+        label: book.status === 'want-to-read' ? 'To Read' : (book.status || 'Book'),
+        color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+        barColor: 'bg-blue-500'
+    };
+    const coverSrc = book.cover || (book.coverId ? `https://covers.openlibrary.org/b/id/${book.coverId}-L.jpg` : '');
+    const genres = Array.isArray(book.genres) ? book.genres : [];
+
     return (
         <div
             onClick={() => onClick(book)}
             className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
         >
             <div className="relative w-full aspect-[2/3] bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                {book.coverId ? (
+                {coverSrc ? (
                     <img
-                        src={`https://covers.openlibrary.org/b/id/${book.coverId}-L.jpg`}
+                        src={coverSrc}
                         alt={book.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         loading="lazy"
@@ -47,10 +54,10 @@ const BookCard = ({ book, onClick }) => {
                 <p className="text-xs text-secondary dark:text-gray-400 truncate mt-0.5">{book.author}</p>
                 <div className="mt-1.5"><Stars rating={book.rating} /></div>
                 <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full ${config.barColor}`} style={{ width: `${book.progress}%` }} />
+                    <div className={`h-full rounded-full ${config.barColor}`} style={{ width: `${book.progress || 0}%` }} />
                 </div>
                 <div className="flex flex-wrap gap-1 mt-2">
-                    {book.genres.map(g => (
+                    {genres.map(g => (
                         <span key={g} className="text-[10px] px-1.5 py-0.5 rounded-full bg-pink-50 text-pink-600 dark:bg-pink-900/20 dark:text-pink-400">{g}</span>
                     ))}
                 </div>

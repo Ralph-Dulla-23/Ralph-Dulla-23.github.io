@@ -5,14 +5,21 @@ import { statusConfig } from '../../data/books';
 
 const BookModal = ({ book, onClose }) => {
     if (!book) return null;
-    const config = statusConfig[book.status];
+    const config = statusConfig[book.status] || {
+        label: book.status === 'want-to-read' ? 'To Read' : (book.status || 'Book'),
+        color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+        barColor: 'bg-blue-500'
+    };
+    const coverSrc = book.cover || (book.coverId ? `https://covers.openlibrary.org/b/id/${book.coverId}-L.jpg` : '');
+    const genres = Array.isArray(book.genres) ? book.genres : [];
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
                 <div className="relative w-full aspect-[3/2] bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                    {book.coverId ? (
+                    {coverSrc ? (
                         <img
-                            src={`https://covers.openlibrary.org/b/id/${book.coverId}-L.jpg`}
+                            src={coverSrc}
                             alt={book.title}
                             className="w-full h-full object-cover"
                         />
@@ -36,13 +43,13 @@ const BookModal = ({ book, onClose }) => {
                     <div className="mt-3"><Stars rating={book.rating} /></div>
                     <div className="mt-4 flex items-center gap-3">
                         <span className={`text-xs font-semibold px-3 py-1 rounded-full ${config.color}`}>{config.label}</span>
-                        <span className="text-xs text-secondary dark:text-gray-400">{book.progress}% complete</span>
+                        <span className="text-xs text-secondary dark:text-gray-400">{book.progress || 0}% complete</span>
                     </div>
                     <div className="mt-3 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${config.barColor} transition-all duration-700`} style={{ width: `${book.progress}%` }} />
+                        <div className={`h-full rounded-full ${config.barColor} transition-all duration-700`} style={{ width: `${book.progress || 0}%` }} />
                     </div>
                     <div className="flex flex-wrap gap-1.5 mt-4">
-                        {book.genres.map(g => (
+                        {genres.map(g => (
                             <span key={g} className="text-xs px-2.5 py-1 rounded-full bg-pink-50 text-pink-600 dark:bg-pink-900/20 dark:text-pink-400 font-medium">{g}</span>
                         ))}
                     </div>

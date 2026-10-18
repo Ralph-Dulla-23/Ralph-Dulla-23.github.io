@@ -1,13 +1,25 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
-import books, { statusConfig } from '../data/books';
-import Lenis from 'lenis';
+import fallbackBooks, { statusConfig } from '../data/books';
+import { watchPublicBooks } from '../lib/db';
+import { OWNER_UID } from '../lib/config';
 import { Link } from 'react-router-dom';
-import {lenisRef} from '../App';
+import { lenisRef } from '../App';
 
 const Library = () => {
     const animRef = useScrollAnimation();
     const carouselRef = useRef(null);
+    const [books, setBooks] = useState(fallbackBooks);
+
+    useEffect(() => {
+        const unsubscribe = watchPublicBooks(OWNER_UID, (liveBooks) => {
+            if (liveBooks && liveBooks.length > 0) {
+                setBooks(liveBooks);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
     const readingCount = books.filter(b => b.status === 'reading').length;
 
     const scroll = (direction) => {
@@ -68,16 +80,21 @@ const Library = () => {
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
                 >
                     {books.map((book, index) => {
-                        const config = statusConfig[book.status];
+                        const config = statusConfig[book.status] || {
+                            label: book.status === 'want-to-read' ? 'To Read' : (book.status || 'Book'),
+                            color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+                            barColor: 'bg-blue-500'
+                        };
+                        const coverSrc = book.cover || (book.coverId ? `https://covers.openlibrary.org/b/id/${book.coverId}-L.jpg` : '');
                         return (
                             <div
-                                key={index}
+                                key={book.id || index}
                                 className="flex-shrink-0 w-[180px] snap-start cursor-pointer group/card transition-transform duration-200 hover:-translate-y-1"
                             >
                                 <div className="relative w-[180px] h-[260px] rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow mb-3 bg-gray-100 dark:bg-gray-800">
-                                    {book.coverId ? (
+                                    {coverSrc ? (
                                         <img
-                                            src={`https://covers.openlibrary.org/b/id/${book.coverId}-L.jpg`}
+                                            src={coverSrc}
                                             alt={book.title}
                                             className="w-full h-full object-cover"
                                             loading="lazy"

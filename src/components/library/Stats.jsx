@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Icons } from './Icons';
 
-export const useCounter = (target, duration = 1200) => {
+const useCounter = (target, duration = 1200) => {
     const [val, setVal] = useState(0);
     const ref = useRef(null);
     useEffect(() => {

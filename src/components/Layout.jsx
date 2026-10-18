@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { BsSun, BsMoonStars } from 'react-icons/bs';
+import { BsSun, BsMoonStars, BsList, BsX } from 'react-icons/bs';
 import { GooeyFilter } from '@/components/ui/gooey-filter';
 import { PixelTrail } from '@/components/ui/pixel-trail';
 import { useScreenSize } from '@/hooks/use-screen-size';
 import Typewriter from './ui/typewriter';
+import { lenisRef } from '../App';
+
+const TYPEWRITER_LABELS = ['RD', 'RDeveloper', 'RDesigner'];
 
 const navLinks = [
     { label: 'About', href: '#about' },
@@ -26,6 +29,7 @@ const navLinks = [
  */
 const Layout = ({ children, darkMode, setDarkMode }) => {
     const [scrolled, setScrolled] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const screenSize = useScreenSize();
 
     useEffect(() => {
@@ -34,18 +38,43 @@ const Layout = ({ children, darkMode, setDarkMode }) => {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
+    // Close mobile menu when screen expands beyond mobile
+    const isMobile = screenSize.lessThan('sm');
+    const [prevIsMobile, setPrevIsMobile] = useState(isMobile);
+    if (prevIsMobile !== isMobile) {
+        setPrevIsMobile(isMobile);
+        if (!isMobile && mobileMenuOpen) {
+            setMobileMenuOpen(false);
+        }
+    }
+
+    // Close mobile menu on Escape key press
+    useEffect(() => {
+        if (!mobileMenuOpen) return;
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') setMobileMenuOpen(false);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [mobileMenuOpen]);
+
     const handleNavClick = (e, href) => {
         e.preventDefault();
+        setMobileMenuOpen(false);
         const el = document.querySelector(href);
         if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (lenisRef?.current) {
+                lenisRef.current.scrollTo(el);
+            } else {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
         }
     };
 
     return (
         <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-gray-950' : 'bg-background'}`}>
-            {/* Gooey Pixel Trail — background sides only, hidden on small screens */}
-            {!screenSize.lessThan('md') && (
+            {/* Gooey Pixel Trail — background sides only, hidden on small screens and touch devices */}
+            {!screenSize.lessThan('md') && (typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches) && (
                 <>
                     <GooeyFilter id="gooey-bg" strength={5} />
                     <div
@@ -62,7 +91,7 @@ const Layout = ({ children, darkMode, setDarkMode }) => {
                 </>
             )}
             {/* Floating Navigation */}
-            <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
+            <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled || mobileMenuOpen
                 ? 'bg-white/80 dark:bg-gray-950/80 backdrop-blur-md shadow-sm border-b border-border/50 dark:border-gray-800/50'
                 : 'bg-transparent'
                 }`}>
@@ -72,10 +101,10 @@ const Layout = ({ children, darkMode, setDarkMode }) => {
                         onClick={(e) => handleNavClick(e, '#hero')}
                         className="font-display font-bold text-lg text-primary dark:text-gray-100 hover:opacity-70 transition-opacity cursor-pointer min-w-[120px]"
                     >
-                        <Typewriter labels={['RD', 'RDeveloper', 'RDesigner']} />
+                        <Typewriter labels={TYPEWRITER_LABELS} />
                     </a>
 
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-3 sm:gap-6">
                         <div className="hidden sm:flex items-center gap-5">
                             {navLinks.map(link => (
                                 <a
@@ -96,11 +125,40 @@ const Layout = ({ children, darkMode, setDarkMode }) => {
                         >
                             {darkMode ? <BsMoonStars className="w-4 h-4" /> : <BsSun className="w-4 h-4" />}
                         </button>
+
+                        {/* Mobile Menu Toggle Button */}
+                        <button
+                            type="button"
+                            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                            className="sm:hidden p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all cursor-pointer"
+                            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+                            aria-expanded={mobileMenuOpen}
+                        >
+                            {mobileMenuOpen ? <BsX className="w-5 h-5" /> : <BsList className="w-5 h-5" />}
+                        </button>
                     </div>
                 </div>
+
+                {/* Mobile Navigation Dropdown */}
+                {mobileMenuOpen && (
+                    <div className="sm:hidden border-t border-border/50 dark:border-gray-800/50 bg-white/95 dark:bg-gray-950/95 backdrop-blur-md px-6 py-4 shadow-lg transition-all">
+                        <div className="flex flex-col space-y-3">
+                            {navLinks.map(link => (
+                                <a
+                                    key={link.href}
+                                    href={link.href}
+                                    onClick={(e) => handleNavClick(e, link.href)}
+                                    className="text-base font-medium py-1.5 text-secondary dark:text-gray-300 hover:text-primary dark:hover:text-white transition-colors cursor-pointer"
+                                >
+                                    {link.label}
+                                </a>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </nav>
 
-            <main className="relative z-10 max-w-3xl mx-auto px-6 pt-20 pb-12 md:pt-20 md:pb-2 border-x border-dashed border-border dark:border-gray-800 min-h-screen bg-surface/50 dark:bg-gray-900/50 backdrop-blur-sm shadow-sm ring-1 ring-black/5 dark:ring-white/5">
+            <main className="relative z-10 max-w-3xl mx-auto px-6 pt-20 pb-12 md:pt-20 md:pb-2 border-x border-dashed border-border dark:border-gray-800 min-h-screen bg-surface/50 dark:bg-gray-900/50 md:backdrop-blur-sm shadow-sm ring-1 ring-black/5 dark:ring-white/5">
                 {children}
             </main>
         </div>

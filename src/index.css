@@ -25,6 +25,11 @@
     pointer-events: none;
   }
 
+  html.dark,
+  body.dark {
+    background-color: #030712;
+  }
+
   body {
     @apply bg-background text-primary font-sans antialiased dark:bg-gray-950 dark:text-gray-100 transition-colors duration-300;
     -webkit-tap-highlight-color: transparent;
@@ -76,6 +81,7 @@
 [data-animate].is-visible {
   opacity: 1;
   transform: translateY(0);
+  will-change: auto;
 }
 
 /* Staggered children animations */
@@ -86,6 +92,10 @@
   will-change: opacity, transform;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+}
+
+[data-animate-stagger].is-visible>* {
+  will-change: auto;
 }
 
 [data-animate-stagger].is-visible>*:nth-child(1) {

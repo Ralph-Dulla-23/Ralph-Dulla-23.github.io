@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
+import { lenisRef } from '../App';
 
 const certificates = [
     {
@@ -56,6 +57,27 @@ const Certificates = () => {
 
     const openModal = (cert) => setSelectedCert(cert);
     const closeModal = () => setSelectedCert(null);
+
+    useEffect(() => {
+        if (selectedCert) {
+            lenisRef.current?.stop();
+            const originalOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+
+            const handleKeyDown = (e) => {
+                if (e.key === 'Escape') {
+                    closeModal();
+                }
+            };
+            window.addEventListener('keydown', handleKeyDown);
+
+            return () => {
+                lenisRef.current?.start();
+                document.body.style.overflow = originalOverflow;
+                window.removeEventListener('keydown', handleKeyDown);
+            };
+        }
+    }, [selectedCert]);
 
     const visibleCerts = showAll ? certificates : certificates.slice(0, INITIAL_COUNT);
     const hasMore = certificates.length > INITIAL_COUNT;
@@ -119,29 +141,29 @@ const Certificates = () => {
             {/* Modal Viewer — rendered via portal to escape main container */}
             {selectedCert && createPortal(
                 <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-fade-in"
                     onClick={closeModal}
                 >
                     <div
-                        className="relative bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden border border-border dark:border-gray-700 animate-fade-in-up"
+                        className="relative bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden border border-border dark:border-gray-700 animate-fade-in-up flex flex-col"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Modal Header */}
-                        <div className="flex items-center justify-between px-5 py-4 border-b border-border dark:border-gray-800">
-                            <div>
-                                <h3 className="text-base font-display font-semibold text-primary dark:text-gray-100">
+                        <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 sm:py-4 border-b border-border dark:border-gray-800 flex-shrink-0">
+                            <div className="min-w-0 pr-3">
+                                <h3 className="text-sm sm:text-base font-display font-semibold text-primary dark:text-gray-100 truncate">
                                     {selectedCert.title}
                                 </h3>
-                                <p className="text-xs text-secondary dark:text-gray-400 mt-0.5">
+                                <p className="text-xs text-secondary dark:text-gray-400 mt-0.5 truncate">
                                     {selectedCert.issuer}
                                 </p>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-shrink-0">
                                 <a
                                     href={selectedCert.file}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-xs font-medium px-3 py-1.5 rounded-md bg-gray-100 dark:bg-gray-800 text-primary dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                                    className="text-xs font-medium px-2.5 sm:px-3 py-1.5 rounded-md bg-gray-100 dark:bg-gray-800 text-primary dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer"
                                 >
                                     Open ↗
                                 </a>
@@ -158,19 +180,46 @@ const Certificates = () => {
                         </div>
 
                         {/* Modal Content */}
-                        <div className="overflow-auto max-h-[calc(90vh-80px)]">
+                        <div className="overflow-auto flex-1">
                             {selectedCert.type === 'image' ? (
-                                <img
-                                    src={selectedCert.file}
-                                    alt={selectedCert.title}
-                                    className="w-full h-auto"
-                                />
+                                <div className="p-3 sm:p-5 flex items-center justify-center bg-gray-50/50 dark:bg-gray-950/40">
+                                    <img
+                                        src={selectedCert.file}
+                                        alt={selectedCert.title}
+                                        className="w-full h-auto max-h-[75vh] object-contain rounded-md"
+                                    />
+                                </div>
                             ) : (
-                                <iframe
-                                    src={selectedCert.file}
-                                    title={selectedCert.title}
-                                    className="w-full h-[75vh]"
-                                />
+                                <div className="flex flex-col h-full">
+                                    {/* Prominent View / Download banner for mobile devices where iframes often fail */}
+                                    <div className="p-3 px-4 bg-gray-50 dark:bg-gray-800/60 border-b border-border dark:border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                                        <div className="flex items-center gap-2 text-secondary dark:text-gray-400">
+                                            <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <span>PDF preview blank or not loading on mobile?</span>
+                                        </div>
+                                        <a
+                                            href={selectedCert.file}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            download
+                                            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-md bg-primary text-white dark:bg-white dark:text-gray-900 font-medium hover:opacity-90 transition-opacity shadow-sm flex-shrink-0"
+                                        >
+                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                            </svg>
+                                            View / Download PDF
+                                        </a>
+                                    </div>
+                                    <div className="w-full h-[55vh] sm:h-[70vh] bg-gray-100 dark:bg-gray-950">
+                                        <iframe
+                                            src={selectedCert.file}
+                                            title={selectedCert.title}
+                                            className="w-full h-full border-0"
+                                        />
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </div>

@@ -8,6 +8,10 @@ import path from 'path'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
+  server: {
+    host: true,
+    port: 5173,
+  },
   plugins: [
     react(),
     ViteImageOptimizer({

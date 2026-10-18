@@ -11,6 +11,11 @@ node_modules
 dist
 dist-ssr
 *.local
+bundle-stats.html
+.env
+.env*.local
+*.apk
+fix-dns.bat
 
 # Editor directories and files
 .vscode/*

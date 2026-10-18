@@ -17,8 +17,9 @@ const PixelTrail = ({
   // Using a Map for O(1) lookups and updates
   const activePixels = useRef(new Map())
   const rafRef = useRef(null)
+  const drawRef = useRef(null)
 
-  const draw = useCallback((timestamp) => {
+  const draw = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
@@ -54,11 +55,15 @@ const PixelTrail = ({
     }
 
     if (activePixels.current.size > 0) {
-      rafRef.current = requestAnimationFrame(draw)
+      rafRef.current = requestAnimationFrame(drawRef.current)
     } else {
       rafRef.current = null
     }
   }, [pixelSize, fadeDuration, delay, pixelColor])
+
+  useEffect(() => {
+    drawRef.current = draw
+  }, [draw])
 
   const handleMouseMove = useCallback((e) => {
     if (!containerRef.current || !canvasRef.current) return
@@ -72,10 +77,10 @@ const PixelTrail = ({
     
     activePixels.current.set(key, now)
 
-    if (!rafRef.current) {
-      rafRef.current = requestAnimationFrame(draw)
+    if (!rafRef.current && drawRef.current) {
+      rafRef.current = requestAnimationFrame(drawRef.current)
     }
-  }, [pixelSize, draw])
+  }, [pixelSize])
 
   // Sync canvas size with container
   useEffect(() => {
@@ -83,11 +88,11 @@ const PixelTrail = ({
       canvasRef.current.width = dimensions.width
       canvasRef.current.height = dimensions.height
       // Trigger a redraw if we have active pixels
-      if (activePixels.current.size > 0 && !rafRef.current) {
-        rafRef.current = requestAnimationFrame(draw)
+      if (activePixels.current.size > 0 && !rafRef.current && drawRef.current) {
+        rafRef.current = requestAnimationFrame(drawRef.current)
       }
     }
-  }, [dimensions, draw])
+  }, [dimensions])
 
   // Cleanup
   useEffect(() => {
