@@ -7,6 +7,7 @@ import {
     deleteBook,
     watchPublicBooks,
     seedExistingBooks,
+    getBookPrivateNotes,
 } from '../../lib/db';
 import { searchBooks } from '../../lib/openlibrary';
 import ReadingTimerModal from '../../components/books/ReadingTimerModal';
@@ -50,6 +51,8 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
     const [favorite, setFavorite] = useState(false);
     const [genres, setGenres] = useState('');
     const [privateNotes, setPrivateNotes] = useState('');
+    const [currentOlKey, setCurrentOlKey] = useState('');
+    const [currentCoverId, setCurrentCoverId] = useState(null);
     const [saving, setSaving] = useState(false);
 
     // Open Library Search
@@ -82,12 +85,14 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
         setFavorite(false);
         setGenres('');
         setPrivateNotes('');
+        setCurrentOlKey('');
+        setCurrentCoverId(null);
         setSearchQuery('');
         setSearchResults([]);
         setIsModalOpen(true);
     };
 
-    const openEditModal = (book) => {
+    const openEditModal = async (book) => {
         setEditingBook(book);
         setTitle(book.title || '');
         setAuthor(book.author || '');
@@ -98,10 +103,21 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
         setCover(book.cover || (book.coverId ? `https://covers.openlibrary.org/b/id/${book.coverId}-L.jpg` : ''));
         setFavorite(Boolean(book.favorite));
         setGenres(Array.isArray(book.genres) ? book.genres.join(', ') : '');
-        setPrivateNotes('');
+        setCurrentOlKey(book.olKey || '');
+        setCurrentCoverId(book.coverId || null);
         setSearchQuery('');
         setSearchResults([]);
         setIsModalOpen(true);
+
+        // Fetch existing private notes asynchronously and populate state (do not clear to empty string)
+        if (user && book.id) {
+            try {
+                const notes = await getBookPrivateNotes(user.uid, book.id);
+                setPrivateNotes(notes);
+            } catch (err) {
+                console.error('Error fetching book private notes:', err);
+            }
+        }
     };
 
     const handleSearchOL = async (e) => {
@@ -124,6 +140,8 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
         if (book.cover) setCover(book.cover);
         if (book.pages) setPages(String(book.pages));
         if (book.genres?.length) setGenres(book.genres.join(', '));
+        if (book.olKey) setCurrentOlKey(book.olKey);
+        if (book.coverId) setCurrentCoverId(book.coverId);
         setSearchResults([]);
     };
 
@@ -138,6 +156,8 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                 user.uid,
                 {
                     id: editingBook?.id,
+                    olKey: editingBook?.olKey || currentOlKey,
+                    coverId: editingBook?.coverId || currentCoverId,
                     title: title.trim(),
                     author: author.trim(),
                     authors: [author.trim()],
@@ -148,6 +168,8 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                     cover: cover.trim(),
                     favorite,
                     genres: genresArray,
+                    startedOn: editingBook?.startedOn || '',
+                    finishedOn: editingBook?.finishedOn || (status === 'completed' ? new Date().toISOString().split('T')[0] : ''),
                 },
                 privateNotes
             );

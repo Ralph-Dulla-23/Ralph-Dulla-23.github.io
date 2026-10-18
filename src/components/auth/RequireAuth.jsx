@@ -44,7 +44,7 @@ export const RequireAuth = ({ children }) => {
                             Sign Out
                         </button>
                         <Link
-                            to="/"
+                            to="/portfolio"
                             className="px-4 py-2 rounded-lg bg-primary dark:bg-gray-100 text-sm font-medium text-white dark:text-gray-900 hover:opacity-90 transition-opacity cursor-pointer inline-flex items-center"
                         >
                             Back to Portfolio

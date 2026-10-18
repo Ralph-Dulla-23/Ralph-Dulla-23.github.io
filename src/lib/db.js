@@ -194,6 +194,19 @@ export async function saveBook(uid, bookData, privateNotes = '') {
 }
 
 /**
+ * Fetches private notes for a book (Owner only).
+ */
+export async function getBookPrivateNotes(uid, bookId) {
+    if (!db || !uid || !bookId) return '';
+    try {
+        const snap = await getDoc(doc(db, 'users', uid, 'books', bookId, 'private', 'notes'));
+        return snap.exists() ? snap.data().notes || '' : '';
+    } catch {
+        return '';
+    }
+}
+
+/**
  * Updates a book's current reading page and status.
  */
 export async function updateBookProgress(uid, bookId, currentPage, pages, status) {
@@ -203,16 +216,21 @@ export async function updateBookProgress(uid, bookId, currentPage, pages, status
     const curPage = Number(currentPage) || 0;
     const progress = totalPages > 0 ? Math.min(100, Math.round((curPage / totalPages) * 100)) : 0;
 
+    let newStatus = status;
     const updates = {
         currentPage: curPage,
         progress,
         updatedAt: serverTimestamp(),
     };
-    if (status) updates.status = status;
-    if (progress >= 100 && !status) {
-        updates.status = 'completed';
+
+    if (progress >= 100) {
+        newStatus = 'completed';
         updates.finishedOn = new Date().toISOString().split('T')[0];
+    } else if (curPage > 0 && (!status || status === 'want-to-read')) {
+        newStatus = 'reading';
     }
+
+    if (newStatus) updates.status = newStatus;
 
     await setDoc(bookRef, updates, { merge: true });
 }
@@ -426,11 +444,42 @@ export async function exportUserData(uid) {
 
 /**
  * Triggers a browser/webview download of the JSON backup.
+ * Supports mobile/Capacitor via navigator.share and clipboard fallback.
  */
-export function downloadJsonBackup(data, filename) {
+export async function downloadJsonBackup(data, filename) {
     const defaultName = `diary-backup-${new Date().toISOString().split('T')[0]}.json`;
     const finalFilename = filename || defaultName;
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const jsonString = JSON.stringify(data, null, 2);
+
+    // Mobile / Capacitor environment safety
+    if (window.Capacitor?.isNativePlatform?.() && navigator.share) {
+        try {
+            const file = new File([jsonString], finalFilename, { type: 'application/json' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: finalFilename,
+                });
+                return;
+            }
+            await navigator.share({
+                title: finalFilename,
+                text: jsonString,
+            });
+            return;
+        } catch (shareErr) {
+            if (shareErr.name === 'AbortError') return;
+            console.warn('Share failed on mobile, attempting clipboard fallback:', shareErr);
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(jsonString);
+                alert('Backup JSON copied to clipboard.');
+                return;
+            }
+        }
+    }
+
+    // Standard browser download
+    const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

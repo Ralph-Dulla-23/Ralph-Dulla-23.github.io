@@ -21,16 +21,29 @@ import {
     BsLockFill,
 } from 'react-icons/bs';
 
+const statusTabs = [
+    { key: 'all', label: 'All' },
+    { key: 'finished', label: 'Finished' },
+    { key: 'playing', label: 'Playing' },
+    { key: 'backlog', label: 'Backlog' },
+];
+
 const GamesPage = ({ darkMode, setDarkMode }) => {
     const { user } = useAuth();
     const [games, setGames] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [filter, setFilter] = useState('all');
 
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingGame, setEditingGame] = useState(null);
     const [title, setTitle] = useState('');
     const [platform, setPlatform] = useState('PC');
+    const [status, setStatus] = useState('finished');
+    const [genres, setGenres] = useState('');
+    const [rawgId, setRawgId] = useState(null);
+    const [released, setReleased] = useState('');
+    const [platforms, setPlatforms] = useState([]);
     const [hoursPlayed, setHoursPlayed] = useState('');
     const [rating, setRating] = useState('8');
     const [finishedOn, setFinishedOn] = useState(new Date().toISOString().split('T')[0]);
@@ -58,6 +71,11 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
         setEditingGame(null);
         setTitle('');
         setPlatform('PC');
+        setStatus('finished');
+        setGenres('');
+        setRawgId(null);
+        setReleased('');
+        setPlatforms([]);
         setHoursPlayed('');
         setRating('8');
         setFinishedOn(new Date().toISOString().split('T')[0]);
@@ -72,6 +90,11 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
         setEditingGame(game);
         setTitle(game.title || '');
         setPlatform(game.platform || 'PC');
+        setStatus(game.status || (game.finishedOn ? 'finished' : 'playing'));
+        setGenres(Array.isArray(game.genres) ? game.genres.join(', ') : (game.genres || ''));
+        setRawgId(game.rawgId || null);
+        setReleased(game.released || '');
+        setPlatforms(Array.isArray(game.platforms) ? game.platforms : (game.platform ? [game.platform] : []));
         setHoursPlayed(String(game.hoursPlayed || ''));
         setRating(String(game.rating || '8'));
         setFinishedOn(game.finishedOn || '');
@@ -106,7 +129,13 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
     const selectRAWGGame = (game) => {
         setTitle(game.title);
         if (game.cover) setCover(game.cover);
-        if (game.platforms?.length) setPlatform(game.platforms[0]);
+        if (game.platforms?.length) {
+            setPlatform(game.platforms[0]);
+            setPlatforms(game.platforms);
+        }
+        if (game.rawgId) setRawgId(game.rawgId);
+        if (game.released) setReleased(game.released);
+        if (game.genres?.length) setGenres(game.genres.join(', '));
         setSearchResults([]);
     };
 
@@ -116,17 +145,29 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
         setSaving(true);
 
         try {
+            const genresArray = typeof genres === 'string'
+                ? genres.split(',').map(s => s.trim()).filter(Boolean)
+                : (Array.isArray(genres) ? genres : []);
+
+            const platformsArray = platforms.length > 0
+                ? platforms
+                : (platform ? [platform] : []);
+
             await saveGame(
                 user.uid,
                 {
                     id: editingGame?.id,
                     title: title.trim(),
                     platform,
+                    status,
                     hoursPlayed: Number(hoursPlayed) || 0,
                     rating: Number(rating) || 0,
-                    finishedOn,
+                    finishedOn: status === 'finished' ? (finishedOn || new Date().toISOString().split('T')[0]) : (finishedOn || ''),
                     cover: cover.trim(),
-                    status: 'finished',
+                    rawgId: rawgId || editingGame?.rawgId || null,
+                    released: released || editingGame?.released || '',
+                    genres: genresArray.length > 0 ? genresArray : (editingGame?.genres || []),
+                    platforms: platformsArray.length > 0 ? platformsArray : (editingGame?.platforms || []),
                 },
                 privateReview
             );
@@ -147,6 +188,12 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
             alert('Failed to delete game: ' + err.message);
         }
     };
+
+    const filteredGames = games.filter((g) => {
+        if (filter === 'all') return true;
+        const gameStatus = g.status || (g.finishedOn ? 'finished' : 'playing');
+        return gameStatus === filter;
+    });
 
     return (
         <BottomTabs title="Games Diary" darkMode={darkMode} setDarkMode={setDarkMode}>
@@ -171,7 +218,7 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
             </div>
 
             {/* Stat Tiles */}
-            <div className="grid grid-cols-3 gap-3 mb-8">
+            <div className="grid grid-cols-3 gap-3 mb-6">
                 <div className="bg-white dark:bg-gray-900 border border-border dark:border-gray-800 rounded-2xl p-4 text-center shadow-sm">
                     <p className="text-2xl font-display font-bold text-primary dark:text-gray-100">
                         {stats.totalFinished}
@@ -198,96 +245,128 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
                 </div>
             </div>
 
+            {/* Filter Tabs */}
+            <div className="flex gap-2 mb-6 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                {statusTabs.map((tab) => (
+                    <button
+                        key={tab.key}
+                        onClick={() => setFilter(tab.key)}
+                        className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all cursor-pointer whitespace-nowrap ${
+                            filter === tab.key
+                                ? 'bg-primary text-white dark:bg-gray-100 dark:text-gray-900'
+                                : 'bg-white dark:bg-gray-900 text-secondary dark:text-gray-400 border border-border dark:border-gray-800 hover:border-gray-400'
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
             {/* Games Grid / List */}
             {loading ? (
                 <div className="py-20 text-center">
                     <div className="w-8 h-8 border-2 border-primary/20 border-t-primary dark:border-gray-700 dark:border-t-gray-100 rounded-full animate-spin mx-auto" />
                 </div>
-            ) : games.length === 0 ? (
+            ) : filteredGames.length === 0 ? (
                 <div className="text-center py-16 bg-white dark:bg-gray-900 border border-dashed border-border dark:border-gray-800 rounded-2xl p-8">
                     <BsController className="w-10 h-10 text-secondary dark:text-gray-600 mx-auto mb-3" />
                     <h3 className="text-base font-semibold text-primary dark:text-gray-200">
-                        No games logged yet
+                        {games.length === 0 ? 'No games logged yet' : 'No games in this tab'}
                     </h3>
                     <p className="text-xs text-secondary dark:text-gray-400 max-w-sm mx-auto mt-1 mb-5">
-                        Log your first completed game to see your stats, ratings, and gaming history.
+                        {games.length === 0
+                            ? 'Log your first completed game to see your stats, ratings, and gaming history.'
+                            : `No games currently found in "${filter}".`}
                     </p>
                     <button
                         onClick={openAddModal}
                         className="px-4 py-2 rounded-xl bg-primary dark:bg-gray-100 text-white dark:text-gray-900 text-xs font-semibold cursor-pointer"
                     >
-                        + Log Your First Game
+                        + Log Game
                     </button>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    {games.map((game) => (
-                        <div
-                            key={game.id}
-                            className="bg-white dark:bg-gray-900 border border-border dark:border-gray-800 rounded-2xl overflow-hidden shadow-sm flex flex-col justify-between group"
-                        >
-                            <div>
-                                <div className="relative aspect-[16/9] bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                                    {game.cover ? (
-                                        <img
-                                            src={game.cover}
-                                            alt={game.title}
-                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                            loading="lazy"
-                                        />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center">
-                                            <BsController className="w-8 h-8 text-secondary dark:text-gray-600" />
-                                        </div>
-                                    )}
-                                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-gray-900 shadow-sm flex items-center gap-1">
-                                        <BsStarFill className="w-3 h-3" />
-                                        {game.rating}
-                                    </span>
-                                </div>
+                    {filteredGames.map((game) => {
+                        const gameStatus = game.status || (game.finishedOn ? 'finished' : 'playing');
+                        return (
+                            <div
+                                key={game.id}
+                                className="bg-white dark:bg-gray-900 border border-border dark:border-gray-800 rounded-2xl overflow-hidden shadow-sm flex flex-col justify-between group"
+                            >
+                                <div>
+                                    <div className="relative aspect-[16/9] bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                                        {game.cover ? (
+                                            <img
+                                                src={game.cover}
+                                                alt={game.title}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                loading="lazy"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                                <BsController className="w-8 h-8 text-secondary dark:text-gray-600" />
+                                            </div>
+                                        )}
+                                        {gameStatus && gameStatus !== 'finished' && (
+                                            <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-black/60 text-white backdrop-blur-sm">
+                                                {gameStatus}
+                                            </span>
+                                        )}
+                                        <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-gray-900 shadow-sm flex items-center gap-1">
+                                            <BsStarFill className="w-3 h-3" />
+                                            {game.rating}
+                                        </span>
+                                    </div>
 
-                                <div className="p-4">
-                                    <h3 className="font-semibold text-sm text-primary dark:text-gray-100 truncate">
-                                        {game.title}
-                                    </h3>
-                                    <div className="flex items-center gap-2 text-xs text-secondary dark:text-gray-400 mt-1">
-                                        <span>{game.platform || 'General'}</span>
-                                        {game.hoursPlayed > 0 && (
-                                            <>
-                                                <span>&middot;</span>
-                                                <span className="flex items-center gap-1">
-                                                    <BsClock className="w-3 h-3" />
-                                                    {game.hoursPlayed}h
-                                                </span>
-                                            </>
+                                    <div className="p-4">
+                                        <h3 className="font-semibold text-sm text-primary dark:text-gray-100 truncate">
+                                            {game.title}
+                                        </h3>
+                                        <div className="flex items-center gap-2 text-xs text-secondary dark:text-gray-400 mt-1">
+                                            <span>{game.platform || 'General'}</span>
+                                            {game.hoursPlayed > 0 && (
+                                                <>
+                                                    <span>&middot;</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <BsClock className="w-3 h-3" />
+                                                        {game.hoursPlayed}h
+                                                    </span>
+                                                </>
+                                            )}
+                                        </div>
+                                        {game.genres && game.genres.length > 0 && (
+                                            <p className="text-[11px] text-secondary dark:text-gray-500 mt-1 truncate">
+                                                {Array.isArray(game.genres) ? game.genres.slice(0, 3).join(', ') : game.genres}
+                                            </p>
+                                        )}
+                                        {game.finishedOn && (
+                                            <p className="text-[11px] text-secondary dark:text-gray-500 mt-1">
+                                                Finished: {game.finishedOn}
+                                            </p>
                                         )}
                                     </div>
-                                    {game.finishedOn && (
-                                        <p className="text-[11px] text-secondary dark:text-gray-500 mt-1">
-                                            Finished: {game.finishedOn}
-                                        </p>
-                                    )}
+                                </div>
+
+                                <div className="px-4 pb-3 pt-1 border-t border-border/50 dark:border-gray-800/50 flex items-center justify-end gap-2">
+                                    <button
+                                        onClick={() => openEditModal(game)}
+                                        className="p-1.5 text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 cursor-pointer"
+                                        title="Edit Game"
+                                    >
+                                        <BsPencilSquare className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(game.id)}
+                                        className="p-1.5 text-secondary dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 cursor-pointer"
+                                        title="Delete Game"
+                                    >
+                                        <BsTrash3 className="w-4 h-4" />
+                                    </button>
                                 </div>
                             </div>
-
-                            <div className="px-4 pb-3 pt-1 border-t border-border/50 dark:border-gray-800/50 flex items-center justify-end gap-2">
-                                <button
-                                    onClick={() => openEditModal(game)}
-                                    className="p-1.5 text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 cursor-pointer"
-                                    title="Edit Game"
-                                >
-                                    <BsPencilSquare className="w-4 h-4" />
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(game.id)}
-                                    className="p-1.5 text-secondary dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 cursor-pointer"
-                                    title="Delete Game"
-                                >
-                                    <BsTrash3 className="w-4 h-4" />
-                                </button>
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
@@ -302,7 +381,7 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
                         onClick={(e) => e.stopPropagation()}
                     >
                         <h2 className="text-xl font-display font-bold text-primary dark:text-gray-100 mb-4">
-                            {editingGame ? 'Edit Game Log' : 'Log a Finished Game'}
+                            {editingGame ? 'Edit Game Log' : 'Log Game'}
                         </h2>
 
                         {/* Optional RAWG Search */}
@@ -362,6 +441,20 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className="block text-xs font-medium text-secondary dark:text-gray-400 mb-1">
+                                        Status
+                                    </label>
+                                    <select
+                                        value={status}
+                                        onChange={(e) => setStatus(e.target.value)}
+                                        className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-border dark:border-gray-700 rounded-lg text-sm"
+                                    >
+                                        <option value="finished">Finished</option>
+                                        <option value="playing">Playing</option>
+                                        <option value="backlog">Backlog</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-secondary dark:text-gray-400 mb-1">
                                         Platform
                                     </label>
                                     <input
@@ -369,20 +462,6 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
                                         value={platform}
                                         onChange={(e) => setPlatform(e.target.value)}
                                         placeholder="PC, PS5, Switch..."
-                                        className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-border dark:border-gray-700 rounded-lg text-sm"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-secondary dark:text-gray-400 mb-1">
-                                        Hours Played
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.5"
-                                        value={hoursPlayed}
-                                        onChange={(e) => setHoursPlayed(e.target.value)}
-                                        placeholder="e.g. 45"
                                         className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-border dark:border-gray-700 rounded-lg text-sm"
                                     />
                                 </div>
@@ -405,15 +484,43 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-secondary dark:text-gray-400 mb-1">
-                                        Date Finished
+                                        Hours Played
                                     </label>
                                     <input
-                                        type="date"
-                                        value={finishedOn}
-                                        onChange={(e) => setFinishedOn(e.target.value)}
+                                        type="number"
+                                        min="0"
+                                        step="0.5"
+                                        value={hoursPlayed}
+                                        onChange={(e) => setHoursPlayed(e.target.value)}
+                                        placeholder="e.g. 45"
                                         className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-border dark:border-gray-700 rounded-lg text-sm"
                                     />
                                 </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-medium text-secondary dark:text-gray-400 mb-1">
+                                    Date Finished {status !== 'finished' && '(Optional)'}
+                                </label>
+                                <input
+                                    type="date"
+                                    value={finishedOn}
+                                    onChange={(e) => setFinishedOn(e.target.value)}
+                                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-border dark:border-gray-700 rounded-lg text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-medium text-secondary dark:text-gray-400 mb-1">
+                                    Genres (comma separated)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={genres}
+                                    onChange={(e) => setGenres(e.target.value)}
+                                    placeholder="Action, RPG, Open World..."
+                                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-border dark:border-gray-700 rounded-lg text-sm"
+                                />
                             </div>
 
                             <div>

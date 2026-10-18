@@ -52,7 +52,7 @@ const LoginPage = ({ darkMode, setDarkMode }) => {
             {/* Top Bar */}
             <header className="max-w-md w-full mx-auto px-6 pt-8 flex items-center justify-between">
                 <Link
-                    to="/"
+                    to="/portfolio"
                     className="inline-flex items-center gap-2 text-sm text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 transition-colors"
                 >
                     <BsArrowLeft className="w-4 h-4" />

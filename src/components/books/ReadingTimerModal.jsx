@@ -23,12 +23,29 @@ const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
             if (saved) {
                 const parsed = JSON.parse(saved);
                 if (parsed.bookId === book.id) {
-                    const diff = Math.floor((Date.now() - new Date(parsed.startedAt).getTime()) / 1000);
+                    const acc = Number(parsed.accumulatedSeconds) || 0;
+                    const wasRunning = Boolean(parsed.isRunning && parsed.lastResumedAt);
+                    let currentElapsed = acc;
+                    let lastResumed = null;
+
+                    if (wasRunning) {
+                        const diff = Math.floor((Date.now() - parsed.lastResumedAt) / 1000);
+                        currentElapsed = acc + Math.max(0, diff);
+                        lastResumed = parsed.lastResumedAt;
+                    } else if (!parsed.accumulatedSeconds && parsed.startedAt) {
+                        // Fallback migration for legacy format
+                        const diff = Math.floor((Date.now() - new Date(parsed.startedAt).getTime()) / 1000);
+                        currentElapsed = Math.max(0, diff);
+                        lastResumed = Date.now();
+                    }
+
                     return {
-                        startedAt: parsed.startedAt,
+                        startedAt: parsed.startedAt || new Date().toISOString(),
                         fromPage: parsed.fromPage ?? (book.currentPage || 0),
-                        elapsedSeconds: Math.max(0, diff),
-                        isRunning: true,
+                        accumulatedSeconds: acc,
+                        lastResumedAt: wasRunning ? lastResumed : null,
+                        elapsedSeconds: Math.max(0, currentElapsed),
+                        isRunning: wasRunning,
                     };
                 }
             }
@@ -38,6 +55,8 @@ const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
         return {
             startedAt: null,
             fromPage: book.currentPage || 0,
+            accumulatedSeconds: 0,
+            lastResumedAt: null,
             elapsedSeconds: 0,
             isRunning: false,
         };
@@ -45,6 +64,8 @@ const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
 
     const [isRunning, setIsRunning] = useState(timerState.isRunning);
     const [startedAt, setStartedAt] = useState(timerState.startedAt);
+    const [accumulatedSeconds, setAccumulatedSeconds] = useState(timerState.accumulatedSeconds);
+    const [lastResumedAt, setLastResumedAt] = useState(timerState.lastResumedAt);
     const [elapsedSeconds, setElapsedSeconds] = useState(timerState.elapsedSeconds);
     const [fromPage, setFromPage] = useState(timerState.fromPage);
     const [toPage, setToPage] = useState(book.currentPage || 0);
@@ -64,27 +85,30 @@ const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
             .finally(() => setLoadingSessions(false));
     }, [user, book.id]);
 
-    // Interval counter
+    // Interval counter avoiding drift
     useEffect(() => {
         let interval = null;
-        if (isRunning && startedAt) {
+        if (isRunning && lastResumedAt) {
             interval = setInterval(() => {
-                const diff = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
-                setElapsedSeconds(Math.max(0, diff));
+                const elapsed = accumulatedSeconds + Math.floor((Date.now() - lastResumedAt) / 1000);
+                setElapsedSeconds(Math.max(0, elapsed));
             }, 1000);
         }
         return () => {
             if (interval) clearInterval(interval);
         };
-    }, [isRunning, startedAt]);
+    }, [isRunning, lastResumedAt, accumulatedSeconds]);
 
     const startTimer = () => {
-        const now = new Date().toISOString();
+        const nowIso = new Date().toISOString();
+        const nowMs = Date.now();
         const cur = book.currentPage || 0;
-        setStartedAt(now);
+        setStartedAt(nowIso);
+        setAccumulatedSeconds(0);
+        setLastResumedAt(nowMs);
+        setElapsedSeconds(0);
         setFromPage(cur);
         setToPage(cur);
-        setElapsedSeconds(0);
         setIsRunning(true);
         setShowFinishForm(false);
 
@@ -94,8 +118,11 @@ const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
                 JSON.stringify({
                     bookId: book.id,
                     bookTitle: book.title,
-                    startedAt: now,
+                    startedAt: nowIso,
                     fromPage: cur,
+                    accumulatedSeconds: 0,
+                    lastResumedAt: nowMs,
+                    isRunning: true,
                 })
             );
         } catch (e) {
@@ -104,16 +131,83 @@ const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
     };
 
     const pauseTimer = () => {
+        const diff = lastResumedAt ? Math.floor((Date.now() - lastResumedAt) / 1000) : 0;
+        const newAccumulated = accumulatedSeconds + Math.max(0, diff);
+
+        setAccumulatedSeconds(newAccumulated);
+        setLastResumedAt(null);
         setIsRunning(false);
+        setElapsedSeconds(newAccumulated);
+
+        try {
+            localStorage.setItem(
+                TIMER_STORAGE_KEY,
+                JSON.stringify({
+                    bookId: book.id,
+                    bookTitle: book.title,
+                    startedAt,
+                    fromPage,
+                    accumulatedSeconds: newAccumulated,
+                    lastResumedAt: null,
+                    isRunning: false,
+                })
+            );
+        } catch (e) {
+            console.error('Failed to persist timer pause:', e);
+        }
     };
 
     const resumeTimer = () => {
+        const nowMs = Date.now();
+        setLastResumedAt(nowMs);
         setIsRunning(true);
+
+        try {
+            localStorage.setItem(
+                TIMER_STORAGE_KEY,
+                JSON.stringify({
+                    bookId: book.id,
+                    bookTitle: book.title,
+                    startedAt,
+                    fromPage,
+                    accumulatedSeconds,
+                    lastResumedAt: nowMs,
+                    isRunning: true,
+                })
+            );
+        } catch (e) {
+            console.error('Failed to persist timer resume:', e);
+        }
     };
 
     const openFinishForm = () => {
-        setIsRunning(false);
-        const mins = Math.max(1, Math.round(elapsedSeconds / 60));
+        let finalSecs = elapsedSeconds;
+        if (isRunning && lastResumedAt) {
+            const diff = Math.floor((Date.now() - lastResumedAt) / 1000);
+            finalSecs = accumulatedSeconds + Math.max(0, diff);
+            setAccumulatedSeconds(finalSecs);
+            setElapsedSeconds(finalSecs);
+            setLastResumedAt(null);
+            setIsRunning(false);
+
+            try {
+                localStorage.setItem(
+                    TIMER_STORAGE_KEY,
+                    JSON.stringify({
+                        bookId: book.id,
+                        bookTitle: book.title,
+                        startedAt,
+                        fromPage,
+                        accumulatedSeconds: finalSecs,
+                        lastResumedAt: null,
+                        isRunning: false,
+                    })
+                );
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        const mins = Math.max(1, Math.round(finalSecs / 60));
         setCustomMinutes(mins);
         setShowFinishForm(true);
     };
@@ -143,6 +237,8 @@ const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
             localStorage.removeItem(TIMER_STORAGE_KEY);
             setIsRunning(false);
             setStartedAt(null);
+            setAccumulatedSeconds(0);
+            setLastResumedAt(null);
             setElapsedSeconds(0);
             setShowFinishForm(false);
 
@@ -163,6 +259,8 @@ const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
             localStorage.removeItem(TIMER_STORAGE_KEY);
             setIsRunning(false);
             setStartedAt(null);
+            setAccumulatedSeconds(0);
+            setLastResumedAt(null);
             setElapsedSeconds(0);
             setShowFinishForm(false);
         }

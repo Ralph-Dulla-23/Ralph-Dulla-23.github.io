@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import Lenis from 'lenis';
@@ -6,6 +6,17 @@ import fallbackBooks, { statusConfig, allGenres } from '../data/books';
 import { watchPublicBooks, watchPublicGames } from '../lib/db';
 import { OWNER_UID } from '../lib/config';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
+import { useAuth } from '../context/AuthContext';
+import {
+    ResponsiveContainer,
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    Tooltip,
+    Cell,
+    CartesianGrid,
+} from 'recharts';
 
 import { Icons } from '../components/library/Icons';
 import BookCard from '../components/library/BookCard';
@@ -19,12 +30,55 @@ import {
     BsCalendarCheck,
     BsLaptop,
     BsArrowRight,
+    BsBarChart,
 } from 'react-icons/bs';
+
+const getRatingColor = (score) => {
+    if (score >= 9) return '#10b981';
+    if (score >= 8) return '#8b5cf6';
+    if (score >= 7) return '#3b82f6';
+    if (score >= 6) return '#f59e0b';
+    return '#ef4444';
+};
+
+const CustomChartTooltip = ({ active, payload, label, darkMode, suffix = 'games' }) => {
+    if (active && payload && payload.length) {
+        const val = payload[0].value;
+        return (
+            <div
+                className={`px-3 py-1.5 rounded-lg text-xs shadow-lg border backdrop-blur-md ${
+                    darkMode
+                        ? 'bg-gray-900/95 border-gray-700 text-gray-100'
+                        : 'bg-white/95 border-gray-200 text-gray-800'
+                }`}
+            >
+                <p className="font-semibold">{label}</p>
+                <p className="text-[11px] text-secondary dark:text-gray-400 mt-0.5">
+                    <span className="font-bold text-primary dark:text-gray-100">{val}</span>{' '}
+                    {val === 1 ? suffix.replace(/s$/, '') : suffix}
+                </p>
+            </div>
+        );
+    }
+    return null;
+};
+
+CustomChartTooltip.propTypes = {
+    active: PropTypes.bool,
+    payload: PropTypes.array,
+    label: PropTypes.any,
+    darkMode: PropTypes.bool,
+    suffix: PropTypes.string,
+};
 
 /**
  * LibraryPage component that displays the user's reading collection, finished games, and stats.
  */
 const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
+    const { isOwner } = useAuth();
+    const isNative = typeof window !== 'undefined' && Boolean(window.Capacitor?.isNativePlatform?.());
+    const showDiaryButton = isOwner || isNative;
+
     const [activeTab, setActiveTab] = useState(initialTab);
     const [books, setBooks] = useState(fallbackBooks);
     const [games, setGames] = useState([]);
@@ -104,6 +158,21 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
     const topAuthors = Object.entries(authorCounts).sort((a, b) => b[1] - a[1]);
     const maxAuthorCount = topAuthors[0]?.[1] || 1;
 
+    // Dynamic book genres: combine allGenres with all unique genres found across live books
+    const combinedBookGenres = useMemo(() => {
+        const set = new Set(allGenres);
+        books.forEach((b) => {
+            if (Array.isArray(b.genres)) {
+                b.genres.forEach((g) => {
+                    if (typeof g === 'string' && g.trim()) {
+                        set.add(g.trim());
+                    }
+                });
+            }
+        });
+        return Array.from(set).sort();
+    }, [books]);
+
     const filteredBooks = books.filter(b => {
         const statusMatch = filter === 'all' || filter === b.status || (filter === 'favorites' && b.favorite);
         const bookGenres = Array.isArray(b.genres) ? b.genres : [];
@@ -132,17 +201,115 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
         return g.platform === platformFilter;
     });
 
+    // Recharts colors
+    const axisColor = darkMode ? '#374151' : '#e5e7eb';
+    const textColor = darkMode ? '#9ca3af' : '#6b7280';
+    const gridColor = darkMode ? '#1f2937' : '#f3f4f6';
+
+    // Games rating distribution (1 to 10 scale)
+    const ratingDistribution = useMemo(() => {
+        const rated = games.filter(g => Number(g.rating) > 0);
+        if (rated.length === 0) return [];
+
+        const bucketCounts = {};
+        for (let r = 1; r <= 10; r++) {
+            bucketCounts[r] = 0;
+        }
+
+        rated.forEach(g => {
+            const val = Math.round(Number(g.rating));
+            if (val >= 1 && val <= 10) {
+                bucketCounts[val] = (bucketCounts[val] || 0) + 1;
+            }
+        });
+
+        const nonZeroRatings = Object.entries(bucketCounts)
+            .filter(([, count]) => count > 0)
+            .map(([r]) => Number(r));
+
+        const minR = nonZeroRatings.length > 0 ? Math.max(1, Math.min(...nonZeroRatings) - 1) : 1;
+        const maxR = 10;
+
+        const data = [];
+        for (let r = minR; r <= maxR; r++) {
+            data.push({
+                rating: `${r}/10`,
+                rawRating: r,
+                count: bucketCounts[r] || 0,
+            });
+        }
+        return data;
+    }, [games]);
+
+    // Finished games by year
+    const finishedByYear = useMemo(() => {
+        const yearMap = {};
+        games.forEach(g => {
+            const dateStr = g.finishedOn || '';
+            const year = dateStr.slice(0, 4);
+            if (year && !isNaN(year) && year.length === 4) {
+                yearMap[year] = (yearMap[year] || 0) + 1;
+            }
+        });
+
+        return Object.entries(yearMap)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([year, count]) => ({
+                year,
+                count,
+            }));
+    }, [games]);
+
+    // Top genres distribution
+    const topGameGenres = useMemo(() => {
+        const genreMap = {};
+        games.forEach(g => {
+            const list = Array.isArray(g.genres)
+                ? g.genres
+                : typeof g.genre === 'string'
+                    ? g.genre.split(',').map(s => s.trim())
+                    : [];
+            list.forEach(genre => {
+                if (genre && typeof genre === 'string') {
+                    const clean = genre.trim();
+                    if (clean) {
+                        genreMap[clean] = (genreMap[clean] || 0) + 1;
+                    }
+                }
+            });
+        });
+
+        return Object.entries(genreMap)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 7)
+            .map(([genre, count]) => ({
+                genre,
+                count,
+            }));
+    }, [games]);
+
     return (
         <div className={`min-h-screen transition-colors ${darkMode ? 'dark bg-gray-950 text-gray-100' : 'bg-background text-primary'}`}>
             <header className="max-w-4xl mx-auto px-6 pt-10 pb-4" ref={headerRef} data-animate>
                 <div className="flex justify-between items-start mb-6">
-                    <Link
-                        to="/"
-                        className="inline-flex items-center gap-1.5 text-sm text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 transition-colors"
-                    >
-                        {Icons.chevronLeft()}
-                        Back to Home
-                    </Link>
+                    <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                        <Link
+                            to="/portfolio"
+                            className="inline-flex items-center gap-1.5 text-sm text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 transition-colors"
+                        >
+                            {Icons.chevronLeft()}
+                            Back to Home
+                        </Link>
+                        {showDiaryButton && (
+                            <Link
+                                to="/app/games"
+                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 dark:bg-gray-800 text-primary dark:text-gray-200 hover:bg-primary hover:text-white dark:hover:bg-gray-700 text-xs font-semibold transition-all border border-primary/20 dark:border-gray-700"
+                            >
+                                <BsController className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                                <span>Back to Diary</span>
+                            </Link>
+                        )}
+                    </div>
                     <button
                         onClick={() => setDarkMode(!darkMode)}
                         className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-yellow-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all cursor-pointer"
@@ -326,7 +493,7 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                                 >
                                     All
                                 </button>
-                                {allGenres.map(g => (
+                                {combinedBookGenres.map(g => (
                                     <button
                                         key={g}
                                         onClick={() => setGenreFilter(g)}
@@ -402,6 +569,182 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                             <StatCard icon={<BsClock className="w-6 h-6 text-blue-500" />} label="Total Hours" value={`${totalGameHours} hrs`} />
                             <StatCard icon={<BsStarFill className="w-6 h-6 text-amber-400" />} label="Avg Rating" value={`${avgGameRating} / 10`} />
                             <StatCard icon={<BsLaptop className="w-6 h-6 text-emerald-500" />} label="Platforms" value={allPlatforms.length || 1} />
+                        </section>
+
+                        {/* Gaming Analytics & Visualizations */}
+                        <section className="mb-10 space-y-6">
+                            <div className="flex items-center gap-2">
+                                <BsBarChart className="w-4 h-4 text-purple-500" />
+                                <h3 className="text-sm font-display font-semibold text-primary dark:text-gray-100 uppercase tracking-wider">
+                                    Gaming Analytics
+                                </h3>
+                            </div>
+
+                            {/* Top Charts Row: Rating Distribution & Finished Games by Year */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Rating Distribution */}
+                                <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col justify-between">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <BsStarFill className="w-3.5 h-3.5 text-amber-400" />
+                                            <h4 className="text-xs font-display font-semibold text-primary dark:text-gray-100 uppercase tracking-wider">
+                                                Rating Distribution
+                                            </h4>
+                                        </div>
+                                        <span className="text-[11px] text-secondary dark:text-gray-400">
+                                            {ratedGames.length} rated
+                                        </span>
+                                    </div>
+
+                                    {ratingDistribution.length === 0 || games.length === 0 ? (
+                                        <div className="h-56 flex flex-col items-center justify-center text-secondary dark:text-gray-500 text-xs">
+                                            <BsStarFill className="w-6 h-6 mb-2 opacity-30 text-amber-400" />
+                                            No rating data logged yet
+                                        </div>
+                                    ) : (
+                                        <div className="w-full h-56 min-h-[220px]">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart
+                                                    data={ratingDistribution}
+                                                    margin={{ top: 10, right: 10, left: -25, bottom: 0 }}
+                                                >
+                                                    <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                                                    <XAxis
+                                                        dataKey="rating"
+                                                        stroke={textColor}
+                                                        fontSize={11}
+                                                        tickLine={false}
+                                                        axisLine={{ stroke: axisColor }}
+                                                    />
+                                                    <YAxis
+                                                        stroke={textColor}
+                                                        fontSize={11}
+                                                        tickLine={false}
+                                                        axisLine={{ stroke: axisColor }}
+                                                        allowDecimals={false}
+                                                    />
+                                                    <Tooltip content={<CustomChartTooltip darkMode={darkMode} suffix="games" />} />
+                                                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                                                        {ratingDistribution.map((entry) => (
+                                                            <Cell
+                                                                key={`cell-rating-${entry.rawRating}`}
+                                                                fill={getRatingColor(entry.rawRating)}
+                                                            />
+                                                        ))}
+                                                    </Bar>
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Finished Games by Year */}
+                                <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col justify-between">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <BsCalendarCheck className="w-3.5 h-3.5 text-purple-500" />
+                                            <h4 className="text-xs font-display font-semibold text-primary dark:text-gray-100 uppercase tracking-wider">
+                                                Finished by Year
+                                            </h4>
+                                        </div>
+                                        <span className="text-[11px] text-secondary dark:text-gray-400">
+                                            {finishedGames.length} finished
+                                        </span>
+                                    </div>
+
+                                    {finishedByYear.length === 0 || games.length === 0 ? (
+                                        <div className="h-56 flex flex-col items-center justify-center text-secondary dark:text-gray-500 text-xs">
+                                            <BsCalendarCheck className="w-6 h-6 mb-2 opacity-30 text-purple-400" />
+                                            No finish dates recorded yet
+                                        </div>
+                                    ) : (
+                                        <div className="w-full h-56 min-h-[220px]">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart
+                                                    data={finishedByYear}
+                                                    margin={{ top: 10, right: 10, left: -25, bottom: 0 }}
+                                                >
+                                                    <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                                                    <XAxis
+                                                        dataKey="year"
+                                                        stroke={textColor}
+                                                        fontSize={11}
+                                                        tickLine={false}
+                                                        axisLine={{ stroke: axisColor }}
+                                                    />
+                                                    <YAxis
+                                                        stroke={textColor}
+                                                        fontSize={11}
+                                                        tickLine={false}
+                                                        axisLine={{ stroke: axisColor }}
+                                                        allowDecimals={false}
+                                                    />
+                                                    <Tooltip content={<CustomChartTooltip darkMode={darkMode} suffix="games finished" />} />
+                                                    <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Top Genres Distribution */}
+                            <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-100 dark:border-gray-800 shadow-sm">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <BsLaptop className="w-3.5 h-3.5 text-emerald-500" />
+                                        <h4 className="text-xs font-display font-semibold text-primary dark:text-gray-100 uppercase tracking-wider">
+                                            Top Genres Distribution
+                                        </h4>
+                                    </div>
+                                    <span className="text-[11px] text-secondary dark:text-gray-400">
+                                        {topGameGenres.length} genres
+                                    </span>
+                                </div>
+
+                                {topGameGenres.length === 0 || games.length === 0 ? (
+                                    <div className="h-48 flex flex-col items-center justify-center text-secondary dark:text-gray-500 text-xs">
+                                        <BsController className="w-6 h-6 mb-2 opacity-30 text-emerald-400" />
+                                        No genre tags recorded in game logs yet
+                                    </div>
+                                ) : (
+                                    <div className="w-full h-64 min-h-[220px]">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart
+                                                data={topGameGenres}
+                                                layout="vertical"
+                                                margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+                                            >
+                                                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
+                                                <XAxis
+                                                    type="number"
+                                                    stroke={textColor}
+                                                    fontSize={11}
+                                                    tickLine={false}
+                                                    axisLine={{ stroke: axisColor }}
+                                                    allowDecimals={false}
+                                                />
+                                                <YAxis
+                                                    type="category"
+                                                    dataKey="genre"
+                                                    stroke={textColor}
+                                                    fontSize={11}
+                                                    tickLine={false}
+                                                    axisLine={{ stroke: axisColor }}
+                                                    width={100}
+                                                />
+                                                <Tooltip content={<CustomChartTooltip darkMode={darkMode} suffix="games" />} />
+                                                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                                                    {topGameGenres.map((entry, index) => {
+                                                        const colors = ['#10b981', '#06b6d4', '#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#3b82f6'];
+                                                        return <Cell key={`cell-genre-${index}`} fill={colors[index % colors.length]} />;
+                                                    })}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                )}
+                            </div>
                         </section>
 
                         {/* Platform Filters */}

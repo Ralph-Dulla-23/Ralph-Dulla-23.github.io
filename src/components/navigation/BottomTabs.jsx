@@ -18,7 +18,7 @@ const tabs = [
     { label: 'Games', path: '/app/games', icon: BsController },
     { label: 'Books', path: '/app/books', icon: BsBook },
     { label: 'Stats', path: '/stats', icon: BsBarChart },
-    { label: 'Portfolio', path: '/', icon: BsPerson },
+    { label: 'Portfolio', path: '/portfolio', icon: BsPerson },
 ];
 
 export const BottomTabs = ({ children, title = 'Diary', darkMode, setDarkMode }) => {
@@ -28,7 +28,7 @@ export const BottomTabs = ({ children, title = 'Diary', darkMode, setDarkMode })
 
     const handleLogout = async () => {
         await logout();
-        navigate('/');
+        navigate('/portfolio');
     };
 
     const handleBackup = async () => {

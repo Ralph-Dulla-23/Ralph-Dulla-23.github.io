@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { BsSun, BsMoonStars, BsList, BsX } from 'react-icons/bs';
+import { Link } from 'react-router-dom';
+import { BsSun, BsMoonStars, BsList, BsX, BsController } from 'react-icons/bs';
 import { GooeyFilter } from '@/components/ui/gooey-filter';
 import { PixelTrail } from '@/components/ui/pixel-trail';
 import { useScreenSize } from '@/hooks/use-screen-size';
+import { useAuth } from '../context/AuthContext';
 import Typewriter from './ui/typewriter';
 import { lenisRef } from '../App';
 
@@ -28,6 +30,10 @@ const navLinks = [
  * @param {Function} props.setDarkMode - Function to toggle theme state
  */
 const Layout = ({ children, darkMode, setDarkMode }) => {
+    const { isOwner } = useAuth();
+    const isNative = typeof window !== 'undefined' && Boolean(window.Capacitor?.isNativePlatform?.());
+    const showDiaryButton = isOwner || isNative;
+
     const [scrolled, setScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const screenSize = useScreenSize();
@@ -153,6 +159,16 @@ const Layout = ({ children, darkMode, setDarkMode }) => {
                                     {link.label}
                                 </a>
                             ))}
+                            {showDiaryButton && (
+                                <Link
+                                    to="/app/games"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="flex items-center gap-2 text-base font-semibold py-1.5 text-primary dark:text-white hover:opacity-80 transition-opacity pt-2 border-t border-border/40 dark:border-gray-800/60"
+                                >
+                                    <BsController className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                                    <span>Open Diary App</span>
+                                </Link>
+                            )}
                         </div>
                     </div>
                 )}
@@ -161,6 +177,18 @@ const Layout = ({ children, darkMode, setDarkMode }) => {
             <main className="relative z-10 max-w-3xl mx-auto px-6 pt-20 pb-12 md:pt-20 md:pb-2 border-x border-dashed border-border dark:border-gray-800 min-h-screen bg-surface/50 dark:bg-gray-900/50 md:backdrop-blur-sm shadow-sm ring-1 ring-black/5 dark:ring-white/5">
                 {children}
             </main>
+
+            {/* Floating Diary App Pill for Owner or Native App */}
+            {showDiaryButton && (
+                <Link
+                    to="/app/games"
+                    aria-label="Open Diary App"
+                    className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-full bg-primary text-white dark:bg-gray-100 dark:text-gray-900 shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 transition-all text-xs font-semibold backdrop-blur-md cursor-pointer border border-white/20 dark:border-gray-800 group"
+                >
+                    <BsController className="w-4 h-4 text-purple-400 dark:text-purple-600 transition-transform group-hover:rotate-12" />
+                    <span>Open Diary App</span>
+                </Link>
+            )}
         </div>
     );
 };
