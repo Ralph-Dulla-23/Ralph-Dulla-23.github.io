@@ -9,6 +9,7 @@ import {
     seedExistingBooks,
     getBookPrivateNotes,
     syncLocalToCloud,
+    pullBooksFromCloud,
 } from '../../lib/db';
 import { searchBooks } from '../../lib/openlibrary';
 import { parseBookmoryMarkdown, importBookmoryBooks } from '../../lib/bookmory';
@@ -23,6 +24,7 @@ import {
     BsSearch,
     BsHeartFill,
     BsCloudArrowUp,
+    BsCloudDownload,
     BsCheck2Circle,
     BsFileEarmarkArrowUp,
 } from 'react-icons/bs';
@@ -72,6 +74,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
     const importInputRef = useRef(null);
     const [importing, setImporting] = useState(false);
     const [syncing, setSyncing] = useState(false);
+    const [pulling, setPulling] = useState(false);
     const [importMsg, setImportMsg] = useState(null);
 
     useEffect(() => {
@@ -323,6 +326,30 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
         }
     };
 
+    const handlePull = async () => {
+        setPulling(true);
+        setImportMsg({ type: 'ok', text: 'Pulling latest data from Firebase database...' });
+        try {
+            const res = await pullBooksFromCloud(user.uid);
+            if (res.error) {
+                setImportMsg({
+                    type: 'warn',
+                    text: `Could not pull from Firebase:\n${res.error}\nMake sure your device has internet access.`,
+                });
+            } else {
+                setImportMsg({
+                    type: 'ok',
+                    text: `Successfully pulled ${res.books} books and ${res.sessions} reading sessions from Firebase!`,
+                });
+                setTimeout(() => setImportMsg(null), 5000);
+            }
+        } catch (err) {
+            setImportMsg({ type: 'error', text: 'Failed to pull from database: ' + err.message });
+        } finally {
+            setPulling(false);
+        }
+    };
+
     const handleSync = async () => {
         setSyncing(true);
         setImportMsg(null);
@@ -394,6 +421,27 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                         className="hidden"
                         onChange={handleImportFiles}
                     />
+
+                    <button
+                        onClick={handlePull}
+                        disabled={pulling}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-xs font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors cursor-pointer disabled:opacity-60"
+                        title="Pull all latest books, reading sessions, and notes from Firebase database"
+                    >
+                        <BsCloudDownload className={`w-4 h-4 ${pulling ? 'animate-bounce' : ''}`} />
+                        {pulling ? 'Pulling...' : 'Pull from Database'}
+                    </button>
+
+                    <button
+                        onClick={handleSync}
+                        disabled={syncing}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-secondary dark:text-gray-300 hover:text-primary dark:hover:text-gray-100 transition-colors cursor-pointer disabled:opacity-60"
+                        title="Push local books and reading sessions to Firebase"
+                    >
+                        <BsCloudArrowUp className="w-4 h-4" />
+                        {syncing ? 'Pushing...' : 'Push to Cloud'}
+                    </button>
+
                     <button
                         onClick={() => importInputRef.current?.click()}
                         disabled={importing}
@@ -401,27 +449,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                         title="Select all the .md files from your Bookmory export"
                     >
                         <BsFileEarmarkArrowUp className="w-4 h-4" />
-                        {importing ? 'Importing...' : 'Import Bookmory'}
-                    </button>
-
-                    <button
-                        onClick={handleSync}
-                        disabled={syncing}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-secondary dark:text-gray-300 hover:text-primary dark:hover:text-gray-100 transition-colors cursor-pointer disabled:opacity-60"
-                        title="Push everything saved on this device up to Firebase"
-                    >
-                        <BsCloudArrowUp className="w-4 h-4" />
-                        {syncing ? 'Syncing...' : 'Sync to Cloud'}
-                    </button>
-
-                    <button
-                        onClick={handleSeed}
-                        disabled={seeding}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 dark:bg-primary/20 text-xs font-semibold text-primary dark:text-gray-200 hover:bg-primary/20 dark:hover:bg-primary/30 transition-colors cursor-pointer disabled:opacity-60"
-                        title="Upload all 51 Bookmory books into Firestore"
-                    >
-                        <BsCloudArrowUp className="w-4 h-4" />
-                        {seeding ? 'Uploading...' : 'Upload 51 Books to Cloud'}
+                        {importing ? 'Importing...' : 'Import Files'}
                     </button>
 
                     <button

@@ -368,10 +368,7 @@ export function watchPublicGames(ownerUid, onUpdate) {
     }
 
     const safeOwnerUid = sanitizeId(ownerUid, 'user');
-    const q = query(
-        collection(db, 'users', safeOwnerUid, 'games'),
-        orderBy('finishedOn', 'desc')
-    );
+    const q = collection(db, 'users', safeOwnerUid, 'games');
 
     const unsubFirestore = onSnapshot(
         q,
@@ -399,11 +396,7 @@ export async function getPublicGames(ownerUid) {
     if (db && ownerUid) {
         try {
             const safeOwnerUid = sanitizeId(ownerUid, 'user');
-            const q = query(
-                collection(db, 'users', safeOwnerUid, 'games'),
-                orderBy('finishedOn', 'desc')
-            );
-            const snap = await getDocs(q);
+            const snap = await getDocs(collection(db, 'users', safeOwnerUid, 'games'));
             cloudGames = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         } catch (err) {
             console.warn('Firestore getPublicGames fallback to local mirror:', err.message);
@@ -724,10 +717,7 @@ export function watchPublicBooks(ownerUid, onUpdate) {
     }
 
     const safeOwnerUid = sanitizeId(ownerUid, 'user');
-    const q = query(
-        collection(db, 'users', safeOwnerUid, 'books'),
-        orderBy('updatedAt', 'desc')
-    );
+    const q = collection(db, 'users', safeOwnerUid, 'books');
 
     const unsubFirestore = onSnapshot(
         q,
@@ -887,6 +877,112 @@ export async function syncLocalToCloud(uid) {
         }
     } catch (err) {
         result.error = err?.code ? `${err.code}: ${err.message}` : err?.message || String(err);
+    }
+    return result;
+}
+
+/**
+ * Pulls all books, private notes, and reading sessions directly from Firestore
+ * and syncs them into the local storage mirror.
+ *
+ * @param {string} uid
+ * @returns {Promise<{books: number, sessions: number, error: string|null}>}
+ */
+export async function pullBooksFromCloud(uid) {
+    const result = { books: 0, sessions: 0, error: null };
+    if (!db) {
+        result.error = 'Firebase is not configured.';
+        return result;
+    }
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+
+    try {
+        const snap = await getDocs(collection(db, 'users', safeUid, 'books'));
+        const localBooks = readJson(LS_BOOKS_KEY, {});
+        const localNotes = readJson(LS_BOOK_NOTES_KEY, {});
+        const allSessions = readJson(LS_SESSIONS_KEY, {});
+
+        for (const docSnap of snap.docs) {
+            const id = docSnap.id;
+            const data = docSnap.data();
+            localBooks[id] = { ...data, id };
+            unmarkDeletedId(id);
+            result.books++;
+
+            // Pull private notes
+            try {
+                const noteSnap = await getDoc(doc(db, 'users', safeUid, 'books', id, 'private', 'notes'));
+                if (noteSnap.exists()) {
+                    localNotes[id] = noteSnap.data().notes || '';
+                }
+            } catch {
+                /* optional private notes */
+            }
+
+            // Pull reading sessions
+            try {
+                const sessSnap = await getDocs(collection(db, 'users', safeUid, 'books', id, 'sessions'));
+                if (!sessSnap.empty) {
+                    allSessions[id] = sessSnap.docs.map((s) => ({ id: s.id, ...s.data() }));
+                    result.sessions += sessSnap.docs.length;
+                }
+            } catch {
+                /* optional sessions */
+            }
+        }
+
+        writeJson(LS_BOOKS_KEY, localBooks);
+        writeJson(LS_BOOK_NOTES_KEY, localNotes);
+        writeJson(LS_SESSIONS_KEY, allSessions);
+        notifyBookSubscribers();
+    } catch (err) {
+        result.error = err?.message || String(err);
+    }
+    return result;
+}
+
+/**
+ * Pulls all games and private reviews directly from Firestore
+ * and syncs them into the local storage mirror.
+ *
+ * @param {string} uid
+ * @returns {Promise<{games: number, error: string|null}>}
+ */
+export async function pullGamesFromCloud(uid) {
+    const result = { games: 0, error: null };
+    if (!db) {
+        result.error = 'Firebase is not configured.';
+        return result;
+    }
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+
+    try {
+        const snap = await getDocs(collection(db, 'users', safeUid, 'games'));
+        const localGames = readJson(LS_GAMES_KEY, {});
+        const localNotes = readJson(LS_GAME_NOTES_KEY, {});
+
+        for (const docSnap of snap.docs) {
+            const id = docSnap.id;
+            const data = docSnap.data();
+            localGames[id] = { ...data, id };
+            unmarkDeletedId(id);
+            result.games++;
+
+            try {
+                const noteSnap = await getDoc(doc(db, 'users', safeUid, 'games', id, 'private', 'notes'));
+                if (noteSnap.exists()) {
+                    localNotes[id] = noteSnap.data().review || '';
+                }
+            } catch {
+                /* optional notes */
+            }
+        }
+
+        writeJson(LS_GAMES_KEY, localGames);
+        writeJson(LS_GAME_NOTES_KEY, localNotes);
+        notifyGameSubscribers();
+    } catch (err) {
+        result.error = err?.message || String(err);
     }
     return result;
 }

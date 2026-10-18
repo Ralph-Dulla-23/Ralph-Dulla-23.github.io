@@ -8,6 +8,8 @@ import {
     watchPublicGames,
     getGamePrivateNotes,
     calculateGameStats,
+    pullGamesFromCloud,
+    syncLocalToCloud,
 } from '../../lib/db';
 import { searchGames } from '../../lib/rawg';
 import {
@@ -19,6 +21,8 @@ import {
     BsPencilSquare,
     BsSearch,
     BsLockFill,
+    BsCloudDownload,
+    BsCloudArrowUp,
 } from 'react-icons/bs';
 
 const statusTabs = [
@@ -50,6 +54,9 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
     const [cover, setCover] = useState('');
     const [privateReview, setPrivateReview] = useState('');
     const [saving, setSaving] = useState(false);
+    const [pulling, setPulling] = useState(false);
+    const [syncing, setSyncing] = useState(false);
+    const [syncMsg, setSyncMsg] = useState(null);
 
     // Auto-Search in Modal
     const [searchQuery, setSearchQuery] = useState('');
@@ -249,6 +256,42 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
         }
     };
 
+    const handlePull = async () => {
+        setPulling(true);
+        setSyncMsg({ type: 'ok', text: 'Pulling latest games from database...' });
+        try {
+            const res = await pullGamesFromCloud(user.uid);
+            if (res.error) {
+                setSyncMsg({ type: 'warn', text: `Could not pull from Firebase:\n${res.error}` });
+            } else {
+                setSyncMsg({ type: 'ok', text: `Successfully pulled ${res.games} games from Firebase!` });
+                setTimeout(() => setSyncMsg(null), 5000);
+            }
+        } catch (err) {
+            setSyncMsg({ type: 'error', text: 'Failed to pull games: ' + err.message });
+        } finally {
+            setPulling(false);
+        }
+    };
+
+    const handleSync = async () => {
+        setSyncing(true);
+        setSyncMsg({ type: 'ok', text: 'Pushing games to cloud...' });
+        try {
+            const res = await syncLocalToCloud(user.uid);
+            if (res.error) {
+                setSyncMsg({ type: 'warn', text: `Saved locally, but cloud push failed:\n${res.error}` });
+            } else {
+                setSyncMsg({ type: 'ok', text: `Synced ${res.games} games to Firebase!` });
+                setTimeout(() => setSyncMsg(null), 5000);
+            }
+        } catch (err) {
+            setSyncMsg({ type: 'error', text: 'Failed to sync games: ' + err.message });
+        } finally {
+            setSyncing(false);
+        }
+    };
+
     const filteredGames = games.filter((g) => {
         if (filter === 'all') return true;
         const gameStatus = g.status || (g.finishedOn ? 'finished' : 'playing');
@@ -268,14 +311,50 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
                     </p>
                 </div>
 
-                <button
-                    onClick={openAddModal}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary dark:bg-gray-100 text-white dark:text-gray-900 font-semibold text-sm hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
-                >
-                    <BsPlusLg className="w-4 h-4" />
-                    Log Game
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        onClick={handlePull}
+                        disabled={pulling}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-xs font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors cursor-pointer disabled:opacity-60"
+                        title="Pull all latest games from Firebase database"
+                    >
+                        <BsCloudDownload className={`w-4 h-4 ${pulling ? 'animate-bounce' : ''}`} />
+                        {pulling ? 'Pulling...' : 'Pull from Database'}
+                    </button>
+
+                    <button
+                        onClick={handleSync}
+                        disabled={syncing}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-secondary dark:text-gray-300 hover:text-primary dark:hover:text-gray-100 transition-colors cursor-pointer disabled:opacity-60"
+                        title="Push local games to Firebase"
+                    >
+                        <BsCloudArrowUp className="w-4 h-4" />
+                        {syncing ? 'Pushing...' : 'Push to Cloud'}
+                    </button>
+
+                    <button
+                        onClick={openAddModal}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-primary dark:bg-gray-100 text-white dark:text-gray-900 font-semibold text-xs hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
+                    >
+                        <BsPlusLg className="w-3.5 h-3.5" />
+                        Log Game
+                    </button>
+                </div>
             </div>
+
+            {syncMsg && (
+                <div
+                    className={`mb-4 p-3 rounded-xl text-xs whitespace-pre-line border ${
+                        syncMsg.type === 'error'
+                            ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300'
+                            : syncMsg.type === 'warn'
+                            ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/50 text-amber-800 dark:text-amber-300'
+                            : 'bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-900/50 text-green-700 dark:text-green-300'
+                    }`}
+                >
+                    {syncMsg.text}
+                </div>
+            )}
 
             {/* Stat Tiles */}
             <div className="grid grid-cols-3 gap-3 mb-6">
