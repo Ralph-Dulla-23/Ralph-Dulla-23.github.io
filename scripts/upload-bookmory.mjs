@@ -1,5 +1,9 @@
 import fs from 'fs';
 import readline from 'readline';
+import dns from 'dns';
+
+// Ensure IPv4 first to avoid Windows IPv6 EACCES socket errors
+dns.setDefaultResultOrder('ipv4first');
 
 // Read .env for Firebase config
 const envContent = fs.readFileSync('.env', 'utf8');
@@ -170,7 +174,7 @@ async function uploadAllBooks(idToken) {
 
 async function main() {
     const args = process.argv.slice(2);
-    let email = 'rdulla_220000000260@uic.edu.ph.com';
+    let email = 'admin@gmail.com';
     let password = args[0] || '';
 
     if (!password) {
