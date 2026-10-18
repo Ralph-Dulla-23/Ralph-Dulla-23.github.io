@@ -11,7 +11,232 @@ import {
     serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { OWNER_UID } from './config';
 import fallbackBooks from '../data/books';
+
+/* =========================================================================
+   ID SANITIZATION & LOCAL STORAGE MIRROR
+   ========================================================================= */
+
+const LS_GAMES_KEY = 'diary_local_games_v1';
+const LS_BOOKS_KEY = 'diary_local_books_v1';
+const LS_SESSIONS_KEY = 'diary_local_sessions_v1';
+const LS_GAME_NOTES_KEY = 'diary_local_game_notes_v1';
+const LS_BOOK_NOTES_KEY = 'diary_local_book_notes_v1';
+const LS_DELETED_IDS_KEY = 'diary_deleted_ids_v1';
+
+const gameSubscribers = new Set();
+const bookSubscribers = new Set();
+
+function notifyGameSubscribers() {
+    gameSubscribers.forEach((cb) => {
+        try {
+            cb();
+        } catch (err) {
+            console.error('Error in game subscriber:', err);
+        }
+    });
+}
+
+function notifyBookSubscribers() {
+    bookSubscribers.forEach((cb) => {
+        try {
+            cb();
+        } catch (err) {
+            console.error('Error in book subscriber:', err);
+        }
+    });
+}
+
+/**
+ * Converts any raw ID into a safe, non-empty Firestore document ID string.
+ * Prevents doc() / collection() from throwing on undefined/null/slashes.
+ */
+export function sanitizeId(rawId, fallbackPrefix = 'item') {
+    const str = String(rawId || `${fallbackPrefix}_${Date.now()}`)
+        .trim()
+        .replace(/[/\\]+/g, '_');
+    return str && str !== 'undefined' && str !== 'null'
+        ? str
+        : `${fallbackPrefix}_${Date.now()}`;
+}
+
+function readJson(key, fallback) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        const parsed = JSON.parse(raw);
+        return parsed ?? fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function writeJson(key, value) {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch (err) {
+        console.warn(`Failed to write ${key} to localStorage:`, err);
+    }
+}
+
+function getDeletedIdsSet() {
+    const arr = readJson(LS_DELETED_IDS_KEY, []);
+    return new Set(Array.isArray(arr) ? arr : []);
+}
+
+function markDeletedId(id) {
+    const set = getDeletedIdsSet();
+    set.add(String(id));
+    writeJson(LS_DELETED_IDS_KEY, Array.from(set));
+}
+
+function unmarkDeletedId(id) {
+    const set = getDeletedIdsSet();
+    if (set.has(String(id))) {
+        set.delete(String(id));
+        writeJson(LS_DELETED_IDS_KEY, Array.from(set));
+    }
+}
+
+function buildMergedGames(cloudGames = []) {
+    const deletedIds = getDeletedIdsSet();
+    const localGamesMap = readJson(LS_GAMES_KEY, {});
+    const mergedMap = new Map();
+
+    cloudGames.forEach((g) => {
+        if (!g) return;
+        const id = sanitizeId(g.id || g.rawgId, 'game');
+        if (!deletedIds.has(id)) {
+            mergedMap.set(id, { ...g, id });
+        }
+    });
+
+    Object.entries(localGamesMap).forEach(([key, g]) => {
+        if (!g) return;
+        const id = sanitizeId(g.id || key, 'game');
+        if (!deletedIds.has(id)) {
+            mergedMap.set(id, { ...mergedMap.get(id), ...g, id });
+        }
+    });
+
+    const list = Array.from(mergedMap.values());
+    list.sort((a, b) => {
+        const dateA = a.finishedOn || a.updatedAtISO || '';
+        const dateB = b.finishedOn || b.updatedAtISO || '';
+        return String(dateB).localeCompare(String(dateA));
+    });
+    return list;
+}
+
+function buildMergedBooks(cloudBooks = []) {
+    const deletedIds = getDeletedIdsSet();
+    const localBooksMap = readJson(LS_BOOKS_KEY, {});
+    const mergedMap = new Map();
+
+    // Always seed base with fallbackBooks when cloudBooks is empty so static library is preserved alongside local edits
+    if (cloudBooks.length === 0) {
+        fallbackBooks.forEach((b, idx) => {
+            const id = sanitizeId(b.id || b.coverId || `book-${idx}`, 'book');
+            if (!deletedIds.has(id)) {
+                const pages = Number(b.pages) || 350;
+                const progress = Number(b.progress) || 0;
+                const currentPage =
+                    b.currentPage !== undefined
+                        ? Number(b.currentPage)
+                        : progress === 100
+                        ? pages
+                        : Math.round((progress / 100) * pages);
+                mergedMap.set(id, {
+                    ...b,
+                    id,
+                    pages,
+                    currentPage,
+                    progress,
+                });
+            }
+        });
+    }
+
+    cloudBooks.forEach((b) => {
+        if (!b) return;
+        const id = sanitizeId(b.id || b.coverId, 'book');
+        if (!deletedIds.has(id)) {
+            mergedMap.set(id, { ...mergedMap.get(id), ...b, id });
+        }
+    });
+
+    Object.entries(localBooksMap).forEach(([key, b]) => {
+        if (!b) return;
+        const id = sanitizeId(b.id || key, 'book');
+        if (!deletedIds.has(id)) {
+            mergedMap.set(id, { ...mergedMap.get(id), ...b, id });
+        }
+    });
+
+    const list = Array.from(mergedMap.values());
+    list.sort((a, b) => {
+        if (a.status === 'reading' && b.status !== 'reading') return -1;
+        if (b.status === 'reading' && a.status !== 'reading') return 1;
+        const timeA = a.updatedAtISO || '';
+        const timeB = b.updatedAtISO || '';
+        if (timeA !== timeB) return String(timeB).localeCompare(String(timeA));
+        return (b._originalIndex ?? 0) - (a._originalIndex ?? 0);
+    });
+    return list;
+}
+
+function ensureLocalBook(rawBookId) {
+    const safeBookId = sanitizeId(rawBookId, 'book');
+    const localBooks = readJson(LS_BOOKS_KEY, {});
+    if (localBooks[safeBookId]) {
+        return { safeBookId, book: localBooks[safeBookId], localBooks };
+    }
+
+    const found = fallbackBooks.find(
+        (b) =>
+            sanitizeId(b.id || b.coverId || b.title, 'book') === safeBookId ||
+            String(b.coverId) === safeBookId
+    );
+
+    if (found) {
+        const totalPages = Number(found.pages) || 350;
+        const progress = Number(found.progress) || 0;
+        const currentPage =
+            found.currentPage !== undefined
+                ? Number(found.currentPage)
+                : progress === 100
+                ? totalPages
+                : Math.round((progress / 100) * totalPages);
+        const copied = {
+            ...found,
+            id: safeBookId,
+            authors: Array.isArray(found.authors) ? found.authors : found.author ? [found.author] : [],
+            author: found.author || (Array.isArray(found.authors) ? found.authors.join(', ') : ''),
+            pages: totalPages,
+            currentPage,
+            progress,
+            updatedAtISO: new Date().toISOString(),
+        };
+        localBooks[safeBookId] = copied;
+        return { safeBookId, book: copied, localBooks };
+    }
+
+    const stub = {
+        id: safeBookId,
+        title: 'Untitled Book',
+        authors: [],
+        author: '',
+        pages: 350,
+        currentPage: 0,
+        progress: 0,
+        status: 'reading',
+        genres: [],
+        updatedAtISO: new Date().toISOString(),
+    };
+    localBooks[safeBookId] = stub;
+    return { safeBookId, book: stub, localBooks };
+}
 
 /* =========================================================================
    GAMES
@@ -19,49 +244,78 @@ import fallbackBooks from '../data/books';
 
 /**
  * Saves or updates a game.
- * Public metadata goes to users/{uid}/games/{gameId}.
+ * Public metadata goes to users/{uid}/games/{gameId} and local storage mirror.
  * Written reviews and private notes go to users/{uid}/games/{gameId}/private/notes.
- * 
+ *
  * @param {string} uid Owner UID
  * @param {Object} gameData Public game data
  * @param {string} [privateReview=''] Private review text
  * @returns {Promise<string>} Saved game ID
  */
 export async function saveGame(uid, gameData, privateReview = '') {
-    if (!db) throw new Error('Database is not initialized. Check your Firebase configuration.');
-    if (!uid) throw new Error('User UID is required to save a game.');
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    const gameId = sanitizeId(gameData?.id || gameData?.rawgId || Date.now(), 'game');
+    const nowIso = new Date().toISOString();
 
-    const gameId = gameData.id || String(gameData.rawgId || Date.now());
-    const gameRef = doc(db, 'users', uid, 'games', gameId);
-
-    const publicDoc = {
+    const baseFields = {
         id: gameId,
-        rawgId: gameData.rawgId || null,
-        title: gameData.title || 'Untitled Game',
-        cover: gameData.cover || '',
-        released: gameData.released || '',
-        genres: Array.isArray(gameData.genres) ? gameData.genres : [],
-        platforms: Array.isArray(gameData.platforms) ? gameData.platforms : [],
-        platform: gameData.platform || '',
-        finishedOn: gameData.finishedOn || '',
-        hoursPlayed: Number(gameData.hoursPlayed) || 0,
-        rating: Number(gameData.rating) || 0, // 0 - 10 scale
-        status: gameData.status || (gameData.finishedOn ? 'finished' : 'playing'),
-        updatedAt: serverTimestamp(),
+        rawgId: gameData?.rawgId || null,
+        title: gameData?.title || 'Untitled Game',
+        cover: gameData?.cover || '',
+        released: gameData?.released || '',
+        genres: Array.isArray(gameData?.genres) ? gameData.genres : [],
+        platforms: Array.isArray(gameData?.platforms) ? gameData.platforms : [],
+        platform: gameData?.platform || '',
+        finishedOn: gameData?.finishedOn || '',
+        hoursPlayed: Number(gameData?.hoursPlayed) || 0,
+        rating: Number(gameData?.rating) || 0, // 0 - 10 scale
+        status: gameData?.status || (gameData?.finishedOn ? 'finished' : 'playing'),
     };
 
-    if (!gameData.id) {
-        publicDoc.createdAt = serverTimestamp();
+    // 1. Save immediately to local storage mirror
+    const localGames = readJson(LS_GAMES_KEY, {});
+    const existingLocal = localGames[gameId] || {};
+    localGames[gameId] = {
+        ...existingLocal,
+        ...baseFields,
+        createdAtISO: existingLocal.createdAtISO || nowIso,
+        updatedAtISO: nowIso,
+    };
+    writeJson(LS_GAMES_KEY, localGames);
+
+    const localNotes = readJson(LS_GAME_NOTES_KEY, {});
+    localNotes[gameId] = privateReview || '';
+    writeJson(LS_GAME_NOTES_KEY, localNotes);
+
+    unmarkDeletedId(gameId);
+    notifyGameSubscribers();
+
+    // 2. Attempt Firestore sync in background-safe try/catch
+    if (db) {
+        try {
+            const gameRef = doc(db, 'users', safeUid, 'games', gameId);
+            const publicDoc = {
+                ...baseFields,
+                updatedAt: serverTimestamp(),
+            };
+            if (!gameData?.id) {
+                publicDoc.createdAt = serverTimestamp();
+            }
+            await setDoc(gameRef, publicDoc, { merge: true });
+
+            const privateRef = doc(db, 'users', safeUid, 'games', gameId, 'private', 'notes');
+            await setDoc(
+                privateRef,
+                {
+                    review: privateReview || '',
+                    updatedAt: serverTimestamp(),
+                },
+                { merge: true }
+            );
+        } catch (err) {
+            console.warn('Firestore sync deferred (saved locally):', err.message);
+        }
     }
-
-    await setDoc(gameRef, publicDoc, { merge: true });
-
-    // Save private review to users/{uid}/games/{gameId}/private/notes
-    const privateRef = doc(db, 'users', uid, 'games', gameId, 'private', 'notes');
-    await setDoc(privateRef, {
-        review: privateReview || '',
-        updatedAt: serverTimestamp(),
-    }, { merge: true });
 
     return gameId;
 }
@@ -70,70 +324,118 @@ export async function saveGame(uid, gameData, privateReview = '') {
  * Deletes a game and its private notes.
  */
 export async function deleteGame(uid, gameId) {
-    if (!db) throw new Error('Database is not initialized');
-    const privateRef = doc(db, 'users', uid, 'games', gameId, 'private', 'notes');
-    try {
-        await deleteDoc(privateRef);
-    } catch {
-        // Ignored if document does not exist
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    const safeGameId = sanitizeId(gameId, 'game');
+
+    const localGames = readJson(LS_GAMES_KEY, {});
+    delete localGames[safeGameId];
+    writeJson(LS_GAMES_KEY, localGames);
+
+    const localNotes = readJson(LS_GAME_NOTES_KEY, {});
+    delete localNotes[safeGameId];
+    writeJson(LS_GAME_NOTES_KEY, localNotes);
+
+    markDeletedId(safeGameId);
+    notifyGameSubscribers();
+
+    if (db) {
+        try {
+            const privateRef = doc(db, 'users', safeUid, 'games', safeGameId, 'private', 'notes');
+            await deleteDoc(privateRef).catch(() => {});
+            const gameRef = doc(db, 'users', safeUid, 'games', safeGameId);
+            await deleteDoc(gameRef);
+        } catch (err) {
+            console.warn('Firestore game delete deferred (deleted locally):', err.message);
+        }
     }
-    const gameRef = doc(db, 'users', uid, 'games', gameId);
-    await deleteDoc(gameRef);
 }
 
 /**
  * Real-time listener for public games of a given owner.
- * Works signed-out with no auth required.
+ * Works signed-out or when Firestore rules reject access by merging local mirror.
  */
-export function watchPublicGames(ownerUid, onUpdate, onError) {
+export function watchPublicGames(ownerUid, onUpdate) {
+    let latestCloudGames = [];
+    const emit = () => {
+        onUpdate(buildMergedGames(latestCloudGames));
+    };
+
+    gameSubscribers.add(emit);
+    emit();
+
     if (!db || !ownerUid) {
-        onUpdate([]);
-        return () => {};
+        return () => {
+            gameSubscribers.delete(emit);
+        };
     }
 
+    const safeOwnerUid = sanitizeId(ownerUid, 'user');
     const q = query(
-        collection(db, 'users', ownerUid, 'games'),
+        collection(db, 'users', safeOwnerUid, 'games'),
         orderBy('finishedOn', 'desc')
     );
 
-    return onSnapshot(
+    const unsubFirestore = onSnapshot(
         q,
         (snapshot) => {
-            const games = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            onUpdate(games);
+            latestCloudGames = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+            emit();
         },
         (error) => {
-            console.error('Error listening to public games:', error);
-            if (onError) onError(error);
-            else onUpdate([]);
+            console.warn('Firestore public games listener fallback to local mirror:', error.message);
+            emit();
         }
     );
+
+    return () => {
+        gameSubscribers.delete(emit);
+        unsubFirestore();
+    };
 }
 
 /**
  * One-time fetch of public games.
  */
 export async function getPublicGames(ownerUid) {
-    if (!db || !ownerUid) return [];
-    const q = query(
-        collection(db, 'users', ownerUid, 'games'),
-        orderBy('finishedOn', 'desc')
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    let cloudGames = [];
+    if (db && ownerUid) {
+        try {
+            const safeOwnerUid = sanitizeId(ownerUid, 'user');
+            const q = query(
+                collection(db, 'users', safeOwnerUid, 'games'),
+                orderBy('finishedOn', 'desc')
+            );
+            const snap = await getDocs(q);
+            cloudGames = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        } catch (err) {
+            console.warn('Firestore getPublicGames fallback to local mirror:', err.message);
+        }
+    }
+    return buildMergedGames(cloudGames);
 }
 
 /**
  * Fetches private notes for a game (Owner only).
  */
 export async function getGamePrivateNotes(uid, gameId) {
-    if (!db || !uid || !gameId) return '';
-    try {
-        const snap = await getDoc(doc(db, 'users', uid, 'games', gameId, 'private', 'notes'));
-        return snap.exists() ? snap.data().review || '' : '';
-    } catch {
-        return '';
+    if (!gameId) return '';
+    const safeGameId = sanitizeId(gameId, 'game');
+    const localNotes = readJson(LS_GAME_NOTES_KEY, {});
+    const hasLocal = Object.prototype.hasOwnProperty.call(localNotes, safeGameId);
+
+    if (db && uid) {
+        try {
+            const safeUid = sanitizeId(uid, 'user');
+            const snap = await getDoc(doc(db, 'users', safeUid, 'games', safeGameId, 'private', 'notes'));
+            if (snap.exists()) {
+                const cloudReview = snap.data().review || '';
+                return hasLocal ? localNotes[safeGameId] : cloudReview;
+            }
+        } catch {
+            // Fall back to local notes on permission error
+        }
     }
+    return localNotes[safeGameId] || '';
 }
 
 
@@ -143,52 +445,92 @@ export async function getGamePrivateNotes(uid, gameId) {
 
 /**
  * Saves or updates a book.
- * Public metadata goes to users/{uid}/books/{bookId}.
+ * Public metadata goes to users/{uid}/books/{bookId} and local storage mirror.
  * Private notes go to users/{uid}/books/{bookId}/private/notes.
  */
 export async function saveBook(uid, bookData, privateNotes = '') {
-    if (!db) throw new Error('Database is not initialized. Check your Firebase configuration.');
-    if (!uid) throw new Error('User UID is required to save a book.');
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    const bookId = sanitizeId(bookData?.id || bookData?.coverId || Date.now(), 'book');
+    const nowIso = new Date().toISOString();
 
-    const bookId = bookData.id || String(bookData.coverId || Date.now());
-    const bookRef = doc(db, 'users', uid, 'books', bookId);
+    const pages = Number(bookData?.pages) || 350;
+    const currentPage = Number(bookData?.currentPage) || 0;
+    const progress =
+        pages > 0
+            ? Math.min(100, Math.round((currentPage / pages) * 100))
+            : Number(bookData?.progress) || 0;
 
-    const pages = Number(bookData.pages) || 0;
-    const currentPage = Number(bookData.currentPage) || 0;
-    const progress = pages > 0 ? Math.min(100, Math.round((currentPage / pages) * 100)) : (Number(bookData.progress) || 0);
-
-    const publicDoc = {
+    const baseFields = {
         id: bookId,
-        olKey: bookData.olKey || '',
-        title: bookData.title || 'Untitled Book',
-        authors: Array.isArray(bookData.authors) ? bookData.authors : (bookData.author ? [bookData.author] : []),
-        author: bookData.author || (Array.isArray(bookData.authors) ? bookData.authors.join(', ') : ''),
-        coverId: bookData.coverId || null,
-        cover: bookData.cover || '',
+        olKey: bookData?.olKey || '',
+        title: bookData?.title || 'Untitled Book',
+        authors: Array.isArray(bookData?.authors)
+            ? bookData.authors
+            : bookData?.author
+            ? [bookData.author]
+            : [],
+        author:
+            bookData?.author ||
+            (Array.isArray(bookData?.authors) ? bookData.authors.join(', ') : ''),
+        coverId: bookData?.coverId || null,
+        cover: bookData?.cover || '',
         pages,
         currentPage,
         progress,
-        status: bookData.status || 'want-to-read', // 'want-to-read' | 'reading' | 'completed' | 'dropped'
-        rating: Number(bookData.rating) || null,
-        favorite: Boolean(bookData.favorite),
-        genres: Array.isArray(bookData.genres) ? bookData.genres : [],
-        startedOn: bookData.startedOn || '',
-        finishedOn: bookData.finishedOn || '',
-        updatedAt: serverTimestamp(),
+        status: bookData?.status || 'want-to-read', // 'want-to-read' | 'reading' | 'completed' | 'dropped'
+        rating: Number(bookData?.rating) || null,
+        favorite: Boolean(bookData?.favorite),
+        genres: Array.isArray(bookData?.genres) ? bookData.genres : [],
+        startedOn: bookData?.startedOn || '',
+        finishedOn: bookData?.finishedOn || '',
     };
 
-    if (!bookData.id) {
-        publicDoc.createdAt = serverTimestamp();
+    // 1. Save immediately to local storage mirror
+    const localBooks = readJson(LS_BOOKS_KEY, {});
+    const existingLocal = localBooks[bookId] || {};
+    localBooks[bookId] = {
+        ...existingLocal,
+        ...baseFields,
+        createdAtISO: existingLocal.createdAtISO || nowIso,
+        updatedAtISO: nowIso,
+    };
+    writeJson(LS_BOOKS_KEY, localBooks);
+
+    if (privateNotes !== undefined) {
+        const localBookNotes = readJson(LS_BOOK_NOTES_KEY, {});
+        localBookNotes[bookId] = privateNotes || '';
+        writeJson(LS_BOOK_NOTES_KEY, localBookNotes);
     }
 
-    await setDoc(bookRef, publicDoc, { merge: true });
+    unmarkDeletedId(bookId);
+    notifyBookSubscribers();
 
-    // Private notes
-    const privateRef = doc(db, 'users', uid, 'books', bookId, 'private', 'notes');
-    await setDoc(privateRef, {
-        notes: privateNotes || '',
-        updatedAt: serverTimestamp(),
-    }, { merge: true });
+    // 2. Attempt Firestore sync in try/catch
+    if (db) {
+        try {
+            const bookRef = doc(db, 'users', safeUid, 'books', bookId);
+            const publicDoc = {
+                ...baseFields,
+                updatedAt: serverTimestamp(),
+            };
+            if (!bookData?.id) {
+                publicDoc.createdAt = serverTimestamp();
+            }
+            await setDoc(bookRef, publicDoc, { merge: true });
+
+            const privateRef = doc(db, 'users', safeUid, 'books', bookId, 'private', 'notes');
+            await setDoc(
+                privateRef,
+                {
+                    notes: privateNotes || '',
+                    updatedAt: serverTimestamp(),
+                },
+                { merge: true }
+            );
+        } catch (err) {
+            console.warn('Firestore sync deferred (saved locally):', err.message);
+        }
+    }
 
     return bookId;
 }
@@ -197,69 +539,133 @@ export async function saveBook(uid, bookData, privateNotes = '') {
  * Fetches private notes for a book (Owner only).
  */
 export async function getBookPrivateNotes(uid, bookId) {
-    if (!db || !uid || !bookId) return '';
-    try {
-        const snap = await getDoc(doc(db, 'users', uid, 'books', bookId, 'private', 'notes'));
-        return snap.exists() ? snap.data().notes || '' : '';
-    } catch {
-        return '';
+    if (!bookId) return '';
+    const safeBookId = sanitizeId(bookId, 'book');
+    const localNotes = readJson(LS_BOOK_NOTES_KEY, {});
+    const hasLocal = Object.prototype.hasOwnProperty.call(localNotes, safeBookId);
+
+    if (db && uid) {
+        try {
+            const safeUid = sanitizeId(uid, 'user');
+            const snap = await getDoc(doc(db, 'users', safeUid, 'books', safeBookId, 'private', 'notes'));
+            if (snap.exists()) {
+                const cloudNotes = snap.data().notes || '';
+                return hasLocal ? localNotes[safeBookId] : cloudNotes;
+            }
+        } catch {
+            // Fall back to local notes on permission error
+        }
     }
+    return localNotes[safeBookId] || '';
 }
 
 /**
  * Updates a book's current reading page and status.
  */
 export async function updateBookProgress(uid, bookId, currentPage, pages, status) {
-    if (!db || !uid || !bookId) return;
-    const bookRef = doc(db, 'users', uid, 'books', bookId);
-    const totalPages = Number(pages) || 0;
+    if (!bookId) return;
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    const { safeBookId, book, localBooks } = ensureLocalBook(bookId);
+
+    const totalPages = Number(pages) || Number(book.pages) || 350;
     const curPage = Number(currentPage) || 0;
     const progress = totalPages > 0 ? Math.min(100, Math.round((curPage / totalPages) * 100)) : 0;
 
-    let newStatus = status;
-    const updates = {
-        currentPage: curPage,
-        progress,
-        updatedAt: serverTimestamp(),
-    };
+    let newStatus = status || book.status || 'reading';
+    const finishedOn =
+        progress >= 100
+            ? new Date().toISOString().split('T')[0]
+            : book.finishedOn || '';
 
     if (progress >= 100) {
         newStatus = 'completed';
-        updates.finishedOn = new Date().toISOString().split('T')[0];
     } else if (curPage > 0 && (!status || status === 'want-to-read')) {
         newStatus = 'reading';
     }
 
-    if (newStatus) updates.status = newStatus;
+    localBooks[safeBookId] = {
+        ...book,
+        id: safeBookId,
+        pages: totalPages,
+        currentPage: curPage,
+        progress,
+        status: newStatus,
+        finishedOn,
+        updatedAtISO: new Date().toISOString(),
+    };
+    writeJson(LS_BOOKS_KEY, localBooks);
+    unmarkDeletedId(safeBookId);
+    notifyBookSubscribers();
 
-    await setDoc(bookRef, updates, { merge: true });
+    if (db) {
+        try {
+            const bookRef = doc(db, 'users', safeUid, 'books', safeBookId);
+            const updates = {
+                pages: totalPages,
+                currentPage: curPage,
+                progress,
+                status: newStatus,
+                updatedAt: serverTimestamp(),
+            };
+            if (progress >= 100) {
+                updates.finishedOn = finishedOn;
+            }
+            await setDoc(bookRef, updates, { merge: true });
+        } catch (err) {
+            console.warn('Firestore progress sync deferred (saved locally):', err.message);
+        }
+    }
 }
 
 /**
  * Saves a reading timer session and advances the book page.
  */
-export async function addReadingSession(uid, bookId, sessionData) {
-    if (!db) throw new Error('Database is not initialized');
-    const sessionId = String(Date.now());
-    const sessionRef = doc(db, 'users', uid, 'books', bookId, 'sessions', sessionId);
+export async function addReadingSession(uid, bookId, sessionData = {}) {
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    const { safeBookId } = ensureLocalBook(bookId || sessionData?.bookId);
+    const sessionId = sanitizeId(Date.now(), 'session');
 
     const minutes = Number(sessionData.minutes) || 0;
     const fromPage = Number(sessionData.fromPage) || 0;
     const toPage = Number(sessionData.toPage) || fromPage;
     const pagesRead = Math.max(0, toPage - fromPage);
+    const startedAt = sessionData.startedAt || new Date().toISOString();
 
-    await setDoc(sessionRef, {
+    const allSessions = readJson(LS_SESSIONS_KEY, {});
+    const existingSessions = Array.isArray(allSessions[safeBookId]) ? allSessions[safeBookId] : [];
+    const sessionRecord = {
         id: sessionId,
-        startedAt: sessionData.startedAt || new Date().toISOString(),
+        startedAt,
         minutes,
         fromPage,
         toPage,
         pagesRead,
-        createdAt: serverTimestamp(),
-    });
+        createdAtISO: new Date().toISOString(),
+    };
+    allSessions[safeBookId] = [sessionRecord, ...existingSessions];
+    writeJson(LS_SESSIONS_KEY, allSessions);
 
     if (toPage > fromPage) {
-        await updateBookProgress(uid, bookId, toPage, sessionData.totalPages, sessionData.status);
+        await updateBookProgress(safeUid, safeBookId, toPage, sessionData.totalPages, sessionData.status);
+    } else {
+        notifyBookSubscribers();
+    }
+
+    if (db) {
+        try {
+            const sessionRef = doc(db, 'users', safeUid, 'books', safeBookId, 'sessions', sessionId);
+            await setDoc(sessionRef, {
+                id: sessionId,
+                startedAt,
+                minutes,
+                fromPage,
+                toPage,
+                pagesRead,
+                createdAt: serverTimestamp(),
+            });
+        } catch (err) {
+            console.warn('Firestore reading session sync deferred (saved locally):', err.message);
+        }
     }
 }
 
@@ -267,79 +673,125 @@ export async function addReadingSession(uid, bookId, sessionData) {
  * Fetches recent reading sessions for a book.
  */
 export async function getReadingSessions(uid, bookId) {
-    if (!db || !uid || !bookId) return [];
-    try {
-        const q = query(
-            collection(db, 'users', uid, 'books', bookId, 'sessions'),
-            orderBy('startedAt', 'desc')
-        );
-        const snap = await getDocs(q);
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch {
-        return [];
+    if (!bookId) return [];
+    const safeBookId = sanitizeId(bookId, 'book');
+    const allSessions = readJson(LS_SESSIONS_KEY, {});
+    const localSessions = Array.isArray(allSessions[safeBookId]) ? allSessions[safeBookId] : [];
+    const mergedMap = new Map();
+
+    if (db && uid) {
+        try {
+            const safeUid = sanitizeId(uid, 'user');
+            const q = query(
+                collection(db, 'users', safeUid, 'books', safeBookId, 'sessions'),
+                orderBy('startedAt', 'desc')
+            );
+            const snap = await getDocs(q);
+            snap.docs.forEach((d) => {
+                mergedMap.set(d.id, { id: d.id, ...d.data() });
+            });
+        } catch {
+            // Fall back to local sessions on permission error
+        }
     }
+
+    localSessions.forEach((s) => {
+        if (s && s.id) {
+            mergedMap.set(String(s.id), s);
+        }
+    });
+
+    const list = Array.from(mergedMap.values());
+    list.sort((a, b) => String(b.startedAt || '').localeCompare(String(a.startedAt || '')));
+    return list;
 }
 
 /**
  * Real-time listener for public books of a given owner.
- * Falls back to local static books if database is unconfigured.
+ * Falls back to local mirror + static books if database is unconfigured or permission-denied.
  */
-export function watchPublicBooks(ownerUid, onUpdate, onError) {
+export function watchPublicBooks(ownerUid, onUpdate) {
+    let latestCloudBooks = [];
+    const emit = () => {
+        onUpdate(buildMergedBooks(latestCloudBooks));
+    };
+
+    bookSubscribers.add(emit);
+    emit();
+
     if (!db || !ownerUid) {
-        onUpdate(fallbackBooks);
-        return () => {};
+        return () => {
+            bookSubscribers.delete(emit);
+        };
     }
 
+    const safeOwnerUid = sanitizeId(ownerUid, 'user');
     const q = query(
-        collection(db, 'users', ownerUid, 'books'),
+        collection(db, 'users', safeOwnerUid, 'books'),
         orderBy('updatedAt', 'desc')
     );
 
-    return onSnapshot(
+    const unsubFirestore = onSnapshot(
         q,
         (snapshot) => {
-            if (snapshot.empty) {
-                // Graceful fallback to static 29 books if Firestore collection is empty
-                onUpdate(fallbackBooks);
-                return;
-            }
-            const books = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            onUpdate(books);
+            latestCloudBooks = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+            emit();
         },
         (error) => {
-            console.error('Error listening to public books:', error);
-            if (onError) onError(error);
-            onUpdate(fallbackBooks);
+            console.warn('Firestore public books listener fallback to local mirror:', error.message);
+            emit();
         }
     );
+
+    return () => {
+        bookSubscribers.delete(emit);
+        unsubFirestore();
+    };
 }
 
 /**
  * Deletes a book and its subcollections.
  */
 export async function deleteBook(uid, bookId) {
-    if (!db) throw new Error('Database is not initialized');
-    try {
-        await deleteDoc(doc(db, 'users', uid, 'books', bookId, 'private', 'notes'));
-    } catch {
-        // Ignored if notes doc does not exist
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    const safeBookId = sanitizeId(bookId, 'book');
+
+    const localBooks = readJson(LS_BOOKS_KEY, {});
+    delete localBooks[safeBookId];
+    writeJson(LS_BOOKS_KEY, localBooks);
+
+    const localNotes = readJson(LS_BOOK_NOTES_KEY, {});
+    delete localNotes[safeBookId];
+    writeJson(LS_BOOK_NOTES_KEY, localNotes);
+
+    markDeletedId(safeBookId);
+    notifyBookSubscribers();
+
+    if (db) {
+        try {
+            await deleteDoc(doc(db, 'users', safeUid, 'books', safeBookId, 'private', 'notes')).catch(() => {});
+            await deleteDoc(doc(db, 'users', safeUid, 'books', safeBookId));
+        } catch (err) {
+            console.warn('Firestore book delete deferred (deleted locally):', err.message);
+        }
     }
-    await deleteDoc(doc(db, 'users', uid, 'books', bookId));
 }
 
 /**
- * Migrates existing 29 books from src/data/books.js into Firestore.
+ * Migrates existing 29 books from src/data/books.js into local storage and Firestore.
  * Useful for one-click initial setup when signed in as the owner.
  */
 export async function seedExistingBooks(uid) {
-    if (!db || !uid) throw new Error('User UID and database are required to seed books.');
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
     let count = 0;
     for (const b of fallbackBooks) {
-        await saveBook(uid, {
+        const bookId = sanitizeId(b.id || b.coverId || b.title.replace(/\s+/g, '-').toLowerCase(), 'book');
+        const pages = b.pages || 350;
+        await saveBook(safeUid, {
             ...b,
-            id: String(b.coverId || b.title.replace(/\s+/g, '-').toLowerCase()),
-            currentPage: b.progress === 100 ? (b.pages || 350) : Math.round(((b.progress || 0) / 100) * (b.pages || 350)),
-            pages: b.pages || 350,
+            id: bookId,
+            currentPage: b.progress === 100 ? pages : Math.round(((b.progress || 0) / 100) * pages),
+            pages,
         });
         count++;
     }
@@ -391,50 +843,56 @@ export function calculateGameStats(games = []) {
  * Exports all user data (games, books, sessions, private notes) as a JSON backup object.
  */
 export async function exportUserData(uid) {
-    if (!db || !uid) throw new Error('User UID is required for data export.');
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
 
-    // 1. Get all games + private reviews
-    const gamesSnap = await getDocs(collection(db, 'users', uid, 'games'));
-    const games = [];
-    for (const d of gamesSnap.docs) {
-        const game = { id: d.id, ...d.data() };
+    // 1. Get all games + private reviews (merged cloud + local)
+    let cloudGames = [];
+    if (db && uid) {
         try {
-            const privateSnap = await getDoc(doc(db, 'users', uid, 'games', d.id, 'private', 'notes'));
-            if (privateSnap.exists()) {
-                game.privateReview = privateSnap.data().review || '';
-            }
+            const gamesSnap = await getDocs(collection(db, 'users', safeUid, 'games'));
+            cloudGames = gamesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
         } catch {
-            // Ignored
+            // Fall back to local games if cloud fails
         }
-        games.push(game);
+    }
+    const mergedGames = buildMergedGames(cloudGames);
+    const games = [];
+    for (const g of mergedGames) {
+        const gameId = sanitizeId(g.id, 'game');
+        const privateReview = await getGamePrivateNotes(safeUid, gameId);
+        games.push({
+            ...g,
+            privateReview,
+        });
     }
 
-    // 2. Get all books + sessions + private notes
-    const booksSnap = await getDocs(collection(db, 'users', uid, 'books'));
+    // 2. Get all books + sessions + private notes (merged cloud + local)
+    let cloudBooks = [];
+    if (db && uid) {
+        try {
+            const booksSnap = await getDocs(collection(db, 'users', safeUid, 'books'));
+            cloudBooks = booksSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        } catch {
+            // Fall back to local books if cloud fails
+        }
+    }
+    const mergedBooks = buildMergedBooks(cloudBooks);
     const books = [];
-    for (const d of booksSnap.docs) {
-        const book = { id: d.id, ...d.data() };
-        try {
-            const privateSnap = await getDoc(doc(db, 'users', uid, 'books', d.id, 'private', 'notes'));
-            if (privateSnap.exists()) {
-                book.privateNotes = privateSnap.data().notes || '';
-            }
-        } catch {
-            // Ignored
-        }
-        try {
-            const sessionsSnap = await getDocs(collection(db, 'users', uid, 'books', d.id, 'sessions'));
-            book.sessions = sessionsSnap.docs.map(s => ({ id: s.id, ...s.data() }));
-        } catch {
-            book.sessions = [];
-        }
-        books.push(book);
+    for (const b of mergedBooks) {
+        const bookId = sanitizeId(b.id, 'book');
+        const privateNotes = await getBookPrivateNotes(safeUid, bookId);
+        const sessions = await getReadingSessions(safeUid, bookId);
+        books.push({
+            ...b,
+            privateNotes,
+            sessions,
+        });
     }
 
     return {
         exportedAt: new Date().toISOString(),
         version: '1.0',
-        uid,
+        uid: safeUid,
         totalGames: games.length,
         totalBooks: books.length,
         games,

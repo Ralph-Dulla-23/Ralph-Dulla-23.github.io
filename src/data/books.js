@@ -163,8 +163,13 @@ const books = [
     },
 ];
 
-// Add original index to preserve reverse chronological order
-books.forEach((b, i) => b._originalIndex = i);
+// Add original index to preserve reverse chronological order and guarantee id/pages fields
+books.forEach((b, i) => {
+    b._originalIndex = i;
+    b.id = String(b.coverId || b.title.replace(/\s+/g, '-').toLowerCase() || `book-${i}`);
+    b.pages = b.pages || 350;
+    b.currentPage = b.progress === 100 ? (b.pages || 350) : Math.round(((b.progress || 0) / 100) * (b.pages || 350));
+});
 
 books.sort((a, b) => {
     // Both are reading: sort by original index reversed

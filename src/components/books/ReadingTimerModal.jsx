@@ -15,6 +15,7 @@ const TIMER_STORAGE_KEY = 'active_reading_timer';
 
 const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
     const { user } = useAuth();
+    const safeBookId = String(book.id || book.coverId || book.title || 'book');
 
     // Initialize timer state from localStorage synchronously if matching
     const [timerState] = useState(() => {
@@ -22,7 +23,7 @@ const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
             const saved = localStorage.getItem(TIMER_STORAGE_KEY);
             if (saved) {
                 const parsed = JSON.parse(saved);
-                if (parsed.bookId === book.id) {
+                if (String(parsed.bookId) === safeBookId) {
                     const acc = Number(parsed.accumulatedSeconds) || 0;
                     const wasRunning = Boolean(parsed.isRunning && parsed.lastResumedAt);
                     let currentElapsed = acc;
@@ -79,11 +80,11 @@ const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
 
     useEffect(() => {
         if (!user) return;
-        getReadingSessions(user.uid, book.id)
+        getReadingSessions(user.uid, safeBookId)
             .then(setRecentSessions)
             .catch(console.error)
             .finally(() => setLoadingSessions(false));
-    }, [user, book.id]);
+    }, [user, safeBookId]);
 
     // Interval counter avoiding drift
     useEffect(() => {
@@ -116,7 +117,7 @@ const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
             localStorage.setItem(
                 TIMER_STORAGE_KEY,
                 JSON.stringify({
-                    bookId: book.id,
+                    bookId: safeBookId,
                     bookTitle: book.title,
                     startedAt: nowIso,
                     fromPage: cur,
@@ -143,7 +144,7 @@ const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
             localStorage.setItem(
                 TIMER_STORAGE_KEY,
                 JSON.stringify({
-                    bookId: book.id,
+                    bookId: safeBookId,
                     bookTitle: book.title,
                     startedAt,
                     fromPage,
@@ -166,7 +167,7 @@ const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
             localStorage.setItem(
                 TIMER_STORAGE_KEY,
                 JSON.stringify({
-                    bookId: book.id,
+                    bookId: safeBookId,
                     bookTitle: book.title,
                     startedAt,
                     fromPage,
@@ -194,7 +195,7 @@ const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
                 localStorage.setItem(
                     TIMER_STORAGE_KEY,
                     JSON.stringify({
-                        bookId: book.id,
+                        bookId: safeBookId,
                         bookTitle: book.title,
                         startedAt,
                         fromPage,
@@ -224,7 +225,7 @@ const ReadingTimerContent = ({ book, onClose, onSessionSaved }) => {
             const totalPages = book.pages || 0;
             const isFinished = totalPages > 0 && finalToPage >= totalPages;
 
-            await addReadingSession(user.uid, book.id, {
+            await addReadingSession(user.uid, safeBookId, {
                 startedAt: startedAt || new Date().toISOString(),
                 minutes,
                 fromPage: finalFromPage,
@@ -517,10 +518,11 @@ ReadingTimerContent.propTypes = {
 
 const ReadingTimerModal = ({ book, isOpen, onClose, onSessionSaved }) => {
     if (!isOpen || !book) return null;
+    const safeBookId = String(book.id || book.coverId || book.title || 'book');
     return (
         <ReadingTimerContent
-            key={book.id}
-            book={book}
+            key={safeBookId}
+            book={{ ...book, id: safeBookId }}
             onClose={onClose}
             onSessionSaved={onSessionSaved}
         />

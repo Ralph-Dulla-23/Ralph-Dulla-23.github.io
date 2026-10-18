@@ -55,10 +55,11 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
     const [currentCoverId, setCurrentCoverId] = useState(null);
     const [saving, setSaving] = useState(false);
 
-    // Open Library Search
+    // Open Library + iTunes Books Auto-Search
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [searching, setSearching] = useState(false);
+    const [hasSearched, setHasSearched] = useState(false);
 
     // Seeding state
     const [seeding, setSeeding] = useState(false);
@@ -72,6 +73,53 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
         });
         return () => unsubscribe();
     }, [user]);
+
+    // Live debounced auto-search (350ms)
+    useEffect(() => {
+        if (!isModalOpen) return;
+        const q = searchQuery.trim();
+        if (q.length < 2) return;
+
+        let cancelled = false;
+
+        const timer = setTimeout(async () => {
+            setSearching(true);
+            try {
+                const results = await searchBooks(q);
+                if (!cancelled) {
+                    setSearchResults(results);
+                    setHasSearched(true);
+                }
+            } catch (err) {
+                console.error('Book auto-search failed:', err);
+                if (!cancelled) {
+                    setSearchResults([]);
+                    setHasSearched(true);
+                }
+            } finally {
+                if (!cancelled) {
+                    setSearching(false);
+                }
+            }
+        }, 350);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [searchQuery, isModalOpen]);
+
+    const handleSearchQueryChange = (e) => {
+        const val = e.target.value;
+        setSearchQuery(val);
+        if (val.trim().length < 2) {
+            setSearchResults([]);
+            setSearching(false);
+            setHasSearched(false);
+        } else {
+            setSearching(true);
+        }
+    };
 
     const openAddModal = () => {
         setEditingBook(null);
@@ -89,11 +137,15 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
         setCurrentCoverId(null);
         setSearchQuery('');
         setSearchResults([]);
+        setHasSearched(false);
         setIsModalOpen(true);
     };
 
     const openEditModal = async (book) => {
-        setEditingBook(book);
+        const safeBookId = String(
+            book.id || book.coverId || (book.title || 'book').replace(/\s+/g, '-').toLowerCase()
+        );
+        setEditingBook({ ...book, id: safeBookId });
         setTitle(book.title || '');
         setAuthor(book.author || '');
         setPages(String(book.pages || ''));
@@ -102,17 +154,18 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
         setRating(String(book.rating || '5'));
         setCover(book.cover || (book.coverId ? `https://covers.openlibrary.org/b/id/${book.coverId}-L.jpg` : ''));
         setFavorite(Boolean(book.favorite));
-        setGenres(Array.isArray(book.genres) ? book.genres.join(', ') : '');
+        setGenres(Array.isArray(book.genres) ? book.genres.join(', ') : (book.genres || ''));
         setCurrentOlKey(book.olKey || '');
         setCurrentCoverId(book.coverId || null);
         setSearchQuery('');
         setSearchResults([]);
+        setHasSearched(false);
         setIsModalOpen(true);
 
-        // Fetch existing private notes asynchronously and populate state (do not clear to empty string)
-        if (user && book.id) {
+        // Fetch existing private notes asynchronously and populate state
+        if (user && safeBookId) {
             try {
-                const notes = await getBookPrivateNotes(user.uid, book.id);
+                const notes = await getBookPrivateNotes(user.uid, safeBookId);
                 setPrivateNotes(notes);
             } catch (err) {
                 console.error('Error fetching book private notes:', err);
@@ -125,24 +178,28 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
         if (!searchQuery.trim()) return;
         setSearching(true);
         try {
-            const results = await searchBooks(searchQuery);
+            const results = await searchBooks(searchQuery.trim());
             setSearchResults(results);
+            setHasSearched(true);
         } catch (err) {
-            console.error('Open Library search failed:', err);
+            console.error('Book search failed:', err);
+            setHasSearched(true);
         } finally {
             setSearching(false);
         }
     };
 
     const selectOLBook = (book) => {
-        setTitle(book.title);
-        setAuthor(book.author);
+        setTitle(book.title || '');
+        setAuthor(book.author || (Array.isArray(book.authors) ? book.authors.join(', ') : '') || 'Unknown Author');
+        setPages(String(book.pages || 350));
         if (book.cover) setCover(book.cover);
-        if (book.pages) setPages(String(book.pages));
         if (book.genres?.length) setGenres(book.genres.join(', '));
         if (book.olKey) setCurrentOlKey(book.olKey);
         if (book.coverId) setCurrentCoverId(book.coverId);
+        setSearchQuery('');
         setSearchResults([]);
+        setHasSearched(false);
     };
 
     const handleSave = async (e) => {
@@ -185,7 +242,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
     const handleDelete = async (bookId) => {
         if (!window.confirm('Are you sure you want to delete this book?')) return;
         try {
-            await deleteBook(user.uid, bookId);
+            await deleteBook(user.uid, String(bookId));
         } catch (err) {
             alert('Failed to delete book: ' + err.message);
         }
@@ -314,10 +371,14 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
             ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {filtered.map((book) => {
+                        const safeBookId = String(
+                            book.id || book.coverId || (book.title || 'book').replace(/\s+/g, '-').toLowerCase()
+                        );
+                        const bookWithId = { ...book, id: safeBookId };
                         const coverSrc = book.cover || (book.coverId ? `https://covers.openlibrary.org/b/id/${book.coverId}-M.jpg` : '');
                         return (
                             <div
-                                key={book.id || book.title}
+                                key={safeBookId}
                                 className="bg-white dark:bg-gray-900 border border-border dark:border-gray-800 rounded-2xl overflow-hidden shadow-sm flex flex-col justify-between group"
                             >
                                 <div>
@@ -376,21 +437,21 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
 
                                 <div className="px-3 pb-2 pt-1 border-t border-border/40 dark:border-gray-800/40 flex items-center justify-end gap-1">
                                     <button
-                                        onClick={() => setTimerBook(book)}
+                                        onClick={() => setTimerBook(bookWithId)}
                                         className="p-1.5 text-secondary dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 cursor-pointer"
                                         title="Reading Timer"
                                     >
                                         <BsClock className="w-3.5 h-3.5" />
                                     </button>
                                     <button
-                                        onClick={() => openEditModal(book)}
+                                        onClick={() => openEditModal(bookWithId)}
                                         className="p-1.5 text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 cursor-pointer"
                                         title="Edit Book"
                                     >
                                         <BsPencilSquare className="w-3.5 h-3.5" />
                                     </button>
                                     <button
-                                        onClick={() => handleDelete(book.id)}
+                                        onClick={() => handleDelete(safeBookId)}
                                         className="p-1.5 text-secondary dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 cursor-pointer"
                                         title="Delete Book"
                                     >
@@ -417,17 +478,17 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                             {editingBook ? 'Edit Book' : 'Add Book to Shelf'}
                         </h2>
 
-                        {/* Open Library Search */}
+                        {/* Auto-Search Books (Open Library + iTunes Books) */}
                         <form onSubmit={handleSearchOL} className="mb-4">
                             <label className="block text-xs font-medium text-secondary dark:text-gray-400 mb-1">
-                                Search Open Library (Free book metadata &amp; covers)
+                                Auto-Fill Book Info (Type title or author to search automatically)
                             </label>
                             <div className="flex gap-2">
                                 <input
                                     type="text"
                                     value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="Search title, author..."
+                                    onChange={handleSearchQueryChange}
+                                    placeholder="Type book title or author..."
                                     className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-border dark:border-gray-700 rounded-lg text-xs"
                                 />
                                 <button
@@ -436,26 +497,59 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                     className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-xs font-semibold cursor-pointer flex items-center gap-1.5"
                                 >
                                     <BsSearch className="w-3 h-3" />
-                                    {searching ? '...' : 'Search'}
+                                    {searching ? 'Searching...' : 'Search'}
                                 </button>
                             </div>
 
-                            {searchResults.length > 0 && (
-                                <div className="mt-2 max-h-40 overflow-y-auto border border-border dark:border-gray-800 rounded-lg p-1 space-y-1">
+                            {searching && (
+                                <div className="mt-2 p-2.5 text-xs text-secondary dark:text-gray-400 bg-gray-50 dark:bg-gray-800/60 rounded-lg flex items-center gap-2">
+                                    <div className="w-3.5 h-3.5 border-2 border-primary/30 border-t-primary dark:border-gray-600 dark:border-t-gray-200 rounded-full animate-spin" />
+                                    Searching books...
+                                </div>
+                            )}
+
+                            {!searching && searchResults.length > 0 && (
+                                <div className="mt-2 max-h-48 overflow-y-auto border border-border dark:border-gray-800 rounded-lg p-1 space-y-1 bg-white dark:bg-gray-900 shadow-inner">
                                     {searchResults.map((r, i) => (
                                         <div
                                             key={r.olKey || i}
                                             onClick={() => selectOLBook(r)}
-                                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded cursor-pointer flex items-center gap-2 text-xs"
+                                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg cursor-pointer flex items-center gap-2.5 text-xs transition-colors"
                                         >
-                                            {r.cover && <img src={r.cover} alt="" className="w-6 h-8 rounded object-cover" />}
-                                            <div className="truncate">
-                                                <p className="font-semibold truncate">{r.title}</p>
-                                                <p className="text-[10px] text-secondary truncate">{r.author}</p>
+                                            {r.cover ? (
+                                                <img
+                                                    src={r.cover}
+                                                    alt=""
+                                                    className="w-7 h-10 rounded object-cover flex-shrink-0 bg-gray-200 dark:bg-gray-700"
+                                                />
+                                            ) : (
+                                                <div className="w-7 h-10 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                                                    <BsBook className="w-3.5 h-3.5 text-secondary" />
+                                                </div>
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-semibold text-primary dark:text-gray-100 truncate">
+                                                    {r.title}
+                                                </p>
+                                                <p className="text-[10px] text-secondary dark:text-gray-400 truncate">
+                                                    {[
+                                                        r.author,
+                                                        r.pages ? `${r.pages} pages` : null,
+                                                        r.genres?.slice(0, 2).join(', '),
+                                                    ]
+                                                        .filter(Boolean)
+                                                        .join(' · ')}
+                                                </p>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
+                            )}
+
+                            {!searching && hasSearched && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
+                                <p className="mt-2 text-xs text-secondary dark:text-gray-400 italic px-1">
+                                    No matches found for &ldquo;{searchQuery.trim()}&rdquo; &mdash; you can still enter details manually below.
+                                </p>
                             )}
                         </form>
 
@@ -549,13 +643,22 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                 <label className="block text-xs font-medium text-secondary dark:text-gray-400 mb-1">
                                     Cover Image URL
                                 </label>
-                                <input
-                                    type="url"
-                                    value={cover}
-                                    onChange={(e) => setCover(e.target.value)}
-                                    placeholder="https://..."
-                                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-border dark:border-gray-700 rounded-lg text-sm"
-                                />
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="url"
+                                        value={cover}
+                                        onChange={(e) => setCover(e.target.value)}
+                                        placeholder="https://..."
+                                        className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-border dark:border-gray-700 rounded-lg text-sm"
+                                    />
+                                    {cover && (
+                                        <img
+                                            src={cover}
+                                            alt="Book cover preview"
+                                            className="w-9 h-12 rounded-lg object-cover border border-border dark:border-gray-700 flex-shrink-0 bg-gray-100 dark:bg-gray-800"
+                                        />
+                                    )}
+                                </div>
                             </div>
 
                             <div>

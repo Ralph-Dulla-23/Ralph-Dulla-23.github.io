@@ -1,5 +1,10 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import {
+    initializeAuth,
+    browserLocalPersistence,
+    indexedDBLocalPersistence,
+    getAuth,
+} from 'firebase/auth';
 import {
     initializeFirestore,
     persistentLocalCache,
@@ -27,7 +32,13 @@ if (isFirebaseConfigured()) {
             db = getFirestore(app);
         }
 
-        auth = getAuth(app);
+        try {
+            auth = initializeAuth(app, {
+                persistence: [browserLocalPersistence, indexedDBLocalPersistence],
+            });
+        } catch {
+            auth = getAuth(app);
+        }
     } catch (err) {
         console.error('Failed to initialize Firebase:', err);
     }
