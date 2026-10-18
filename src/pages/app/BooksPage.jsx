@@ -83,6 +83,31 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
         return () => unsubscribe();
     }, [user]);
 
+    // Auto-sync 51 Bookmory books into Firestore in background when owner opens page
+    useEffect(() => {
+        if (!user) return;
+        const autoSyncKey = 'diary_auto_synced_51_books_v2';
+        if (localStorage.getItem(autoSyncKey)) return;
+
+        let cancelled = false;
+        const timer = setTimeout(async () => {
+            try {
+                const res = await seedExistingBooks(user.uid);
+                if (!cancelled && res?.count > 0) {
+                    localStorage.setItem(autoSyncKey, 'true');
+                    console.log(`Auto-synced ${res.count} Bookmory books to Firestore.`);
+                }
+            } catch (err) {
+                console.warn('Auto-sync deferred:', err.message);
+            }
+        }, 1500);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [user]);
+
     // Live debounced auto-search (350ms)
     useEffect(() => {
         if (!isModalOpen) return;
@@ -258,14 +283,24 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
     };
 
     const handleSeed = async () => {
-        if (!window.confirm('Seed your 29 existing books from books.js into Firestore?')) return;
+        if (!window.confirm('Sync all 51 Bookmory books into Firestore database?')) return;
         setSeeding(true);
+        setImportMsg({ type: 'ok', text: 'Syncing 51 books to Firebase...' });
         try {
-            await seedExistingBooks(user.uid);
+            const { count, sessionsCount } = await seedExistingBooks(user.uid, (done, total, bookTitle) => {
+                setImportMsg({
+                    type: 'ok',
+                    text: `Syncing books to Firebase: ${done}/${total}${bookTitle ? ` (${bookTitle})` : ''}`,
+                });
+            });
             setSeedSuccess(true);
-            setTimeout(() => setSeedSuccess(false), 5000);
+            setImportMsg({
+                type: 'ok',
+                text: `Successfully synced ${count} books and ${sessionsCount} reading sessions to Firebase!`,
+            });
+            setTimeout(() => setSeedSuccess(false), 6000);
         } catch (err) {
-            alert('Failed to seed books: ' + err.message);
+            setImportMsg({ type: 'error', text: 'Failed to sync books: ' + err.message });
         } finally {
             setSeeding(false);
         }
@@ -382,10 +417,11 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                     <button
                         onClick={handleSeed}
                         disabled={seeding}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-secondary dark:text-gray-300 hover:text-primary dark:hover:text-gray-100 transition-colors cursor-pointer"
-                        title="Import the 29 hardcoded books from books.js into Firestore"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 dark:bg-primary/20 text-xs font-semibold text-primary dark:text-gray-200 hover:bg-primary/20 dark:hover:bg-primary/30 transition-colors cursor-pointer disabled:opacity-60"
+                        title="Upload all 51 Bookmory books into Firestore"
                     >
-                        {seeding ? 'Seeding...' : 'Seed Existing (29)'}
+                        <BsCloudArrowUp className="w-4 h-4" />
+                        {seeding ? 'Uploading...' : 'Upload 51 Books to Cloud'}
                     </button>
 
                     <button
@@ -401,7 +437,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
             {seedSuccess && (
                 <div className="mb-4 p-3 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900/50 rounded-xl text-green-700 dark:text-green-300 text-xs flex items-center gap-2">
                     <BsCheck2Circle className="w-4 h-4" />
-                    Successfully seeded 29 books into your live Firestore!
+                    Successfully synced 51 Bookmory books and reading sessions into Firestore!
                 </div>
             )}
 

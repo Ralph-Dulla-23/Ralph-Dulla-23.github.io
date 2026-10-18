@@ -134,29 +134,27 @@ function buildMergedBooks(cloudBooks = []) {
     const localBooksMap = readJson(LS_BOOKS_KEY, {});
     const mergedMap = new Map();
 
-    // Always seed base with fallbackBooks when cloudBooks is empty so static library is preserved alongside local edits
-    if (cloudBooks.length === 0) {
-        fallbackBooks.forEach((b, idx) => {
-            const id = sanitizeId(b.id || b.coverId || `book-${idx}`, 'book');
-            if (!deletedIds.has(id)) {
-                const pages = Number(b.pages) || 350;
-                const progress = Number(b.progress) || 0;
-                const currentPage =
-                    b.currentPage !== undefined
-                        ? Number(b.currentPage)
-                        : progress === 100
-                        ? pages
-                        : Math.round((progress / 100) * pages);
-                mergedMap.set(id, {
-                    ...b,
-                    id,
-                    pages,
-                    currentPage,
-                    progress,
-                });
-            }
-        });
-    }
+    // Always seed base with fallbackBooks so complete library is present and overlay with cloud updates
+    fallbackBooks.forEach((b, idx) => {
+        const id = sanitizeId(b.id || b.coverId || `book-${idx}`, 'book');
+        if (!deletedIds.has(id)) {
+            const pages = Number(b.pages) || 350;
+            const progress = Number(b.progress) || 0;
+            const currentPage =
+                b.currentPage !== undefined
+                    ? Number(b.currentPage)
+                    : progress === 100
+                    ? pages
+                    : Math.round((progress / 100) * pages);
+            mergedMap.set(id, {
+                ...b,
+                id,
+                pages,
+                currentPage,
+                progress,
+            });
+        }
+    });
 
     cloudBooks.forEach((b) => {
         if (!b) return;
@@ -778,24 +776,49 @@ export async function deleteBook(uid, bookId) {
 }
 
 /**
- * Migrates existing 29 books from src/data/books.js into local storage and Firestore.
+ * Migrates all 51 Bookmory books from src/data/books.js into local storage and Firestore.
  * Useful for one-click initial setup when signed in as the owner.
  */
-export async function seedExistingBooks(uid) {
+export async function seedExistingBooks(uid, onProgress) {
     const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
     let count = 0;
-    for (const b of fallbackBooks) {
+    let sessionsCount = 0;
+    for (let i = 0; i < fallbackBooks.length; i++) {
+        const b = fallbackBooks[i];
+        onProgress?.(i, fallbackBooks.length, b.title);
         const bookId = sanitizeId(b.id || b.coverId || b.title.replace(/\s+/g, '-').toLowerCase(), 'book');
         const pages = b.pages || 350;
-        await saveBook(safeUid, {
-            ...b,
-            id: bookId,
-            currentPage: b.progress === 100 ? pages : Math.round(((b.progress || 0) / 100) * pages),
-            pages,
-        });
+        await saveBook(
+            safeUid,
+            {
+                ...b,
+                id: bookId,
+                currentPage: b.progress === 100 ? pages : Math.round(((b.progress || 0) / 100) * pages),
+                pages,
+            },
+            b.privateNotes || ''
+        );
+
+        if (Array.isArray(b.logs)) {
+            for (let j = 0; j < b.logs.length; j++) {
+                const log = b.logs[j];
+                if (!log.minutes) continue;
+                await addReadingSession(safeUid, bookId, {
+                    id: `bookmory_${bookId}_${j + 1}`,
+                    startedAt: log.start ? `${log.start}T12:00:00.000Z` : new Date().toISOString(),
+                    minutes: log.minutes,
+                    fromPage: 0,
+                    toPage: b.status === 'completed' ? pages : 0,
+                    totalPages: pages,
+                    status: b.status,
+                });
+                sessionsCount++;
+            }
+        }
         count++;
     }
-    return count;
+    onProgress?.(fallbackBooks.length, fallbackBooks.length, '');
+    return { count, sessionsCount };
 }
 
 /**
