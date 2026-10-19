@@ -1,0 +1,68 @@
+/**
+ * Static baseline fallback games for public portfolio display.
+ * Used when Firestore public shelf has not yet been populated or is offline.
+ */
+const fallbackGames = [
+    {
+        id: 'wiki-32436778',
+        rawgId: 'wiki-32436778',
+        title: 'Dishonored',
+        cover: 'https://upload.wikimedia.org/wikipedia/en/6/65/Dishonored_box_art_Bethesda.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=original',
+        released: '2012-01-01',
+        genres: ['Action-Adventure', 'Adventure', 'Action'],
+        platforms: ['PC'],
+        platform: 'PC',
+        finishedOn: '2026-10-19',
+        hoursPlayed: 0,
+        rating: 10,
+        status: 'finished',
+        mediaType: 'game',
+    },
+    {
+        id: 'wiki-52464953',
+        rawgId: 'wiki-52464953',
+        title: 'The Last of Us Part II',
+        cover: 'https://upload.wikimedia.org/wikipedia/en/4/4f/TLOU_P2_Box_Art_2.png?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=original',
+        released: '2020-01-01',
+        genres: ['Action', 'Adventure'],
+        platforms: ['PC'],
+        platform: 'PC',
+        finishedOn: '2026-10-18',
+        hoursPlayed: 16,
+        rating: 10,
+        status: 'finished',
+        mediaType: 'game',
+    },
+    {
+        id: 'wiki-73953855',
+        rawgId: 'wiki-73953855',
+        title: 'Call of Duty: Modern Warfare III',
+        cover: 'https://upload.wikimedia.org/wikipedia/en/f/f6/MWIII_Cover_Art.png?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=original',
+        released: '2023-01-01',
+        genres: ['Action', 'Adventure'],
+        platforms: ['PC'],
+        platform: 'PC',
+        finishedOn: '2026-10-19',
+        hoursPlayed: 0,
+        rating: 8,
+        status: 'playing',
+        mediaType: 'game',
+    },
+    {
+        id: 'wiki-77675351',
+        rawgId: 'wiki-77675351',
+        title: 'Dying Light: The Beast',
+        cover: 'https://upload.wikimedia.org/wikipedia/en/d/db/Dying_Light_The_Beast_cover_art.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=original',
+        released: '2025-01-01',
+        genres: ['Action', 'Adventure'],
+        platforms: ['PC'],
+        platform: 'PC',
+        finishedOn: '2026-10-18',
+        hoursPlayed: 6,
+        rating: 9,
+        status: 'playing',
+        mediaType: 'game',
+    },
+];
+
+export default fallbackGames;

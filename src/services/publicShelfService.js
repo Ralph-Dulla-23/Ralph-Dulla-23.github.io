@@ -1,6 +1,7 @@
 import { db } from '../lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import fallbackBooks from '../data/books';
+import fallbackGames from '../data/games';
 
 /**
  * Service providing real-time observations of public shelf projections and highlights.
@@ -54,10 +55,10 @@ export function observePublicShelf(ownerUid, onUpdate) {
 
         let list = Array.from(map.values());
 
-        // Fallback: If no public items exist yet, use sanitized static fallback books
+        // Fallback: If no public items exist yet, use sanitized static fallback books and games
         // to maintain the developer portfolio showcase
-        if (list.length === 0 && fallbackBooks && fallbackBooks.length > 0) {
-            list = fallbackBooks.map((b) => ({
+        if (list.length === 0) {
+            const staticBooks = (fallbackBooks || []).map((b) => ({
                 schemaVersion: 2,
                 id: String(b.id || b.coverId),
                 mediaType: 'book',
@@ -79,6 +80,32 @@ export function observePublicShelf(ownerUid, onUpdate) {
                 favorite: Boolean(b.favorite),
                 publishedAt: b.updatedAtISO || new Date().toISOString(),
             }));
+
+            const staticGames = (fallbackGames || []).map((g) => ({
+                schemaVersion: 2,
+                id: String(g.id),
+                mediaType: 'game',
+                title: g.title,
+                author: '',
+                creators: [],
+                cover: g.cover || '',
+                coverUrl: g.cover || '',
+                status: g.status || 'playing',
+                rating: g.rating || 0,
+                ratingScale: 10,
+                genres: g.genres || [],
+                platforms: g.platforms || [],
+                platform: g.platform || '',
+                hoursPlayed: g.hoursPlayed || 0,
+                pages: 0,
+                currentPage: 0,
+                progress: 0,
+                finishedOn: g.finishedOn || '',
+                favorite: false,
+                publishedAt: new Date().toISOString(),
+            }));
+
+            list = [...staticBooks, ...staticGames];
         }
 
         onUpdate(list);
