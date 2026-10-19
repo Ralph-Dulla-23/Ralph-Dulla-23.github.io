@@ -34,7 +34,7 @@ test('TC-03: Library.jsx portfolio preview uses observePublicShelf exclusively',
 
 test('TC-04: firestore.rules authorizes v2 sessions and tightens private collections', async () => {
     const rulesPath = resolve('firestore.rules');
-    const content = readFileSync(rulesPath, 'utf-8');
+    const content = readFileSync(rulesPath, 'utf-8').replace(/\r\n/g, '\n');
 
     // SEC-02: Explicit v2 sessions rule
     assert.ok(
