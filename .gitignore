@@ -34,13 +34,7 @@ diary-backup-*.json
 *.backup*.json
 *user-export*.json
 
-# Documentation & Notes
-*.md
-!README.md
-docs/
-
 # Testing, Coverage & Screenshots
-tests/
 coverage/
 .nyc_output/
 *.lcov
