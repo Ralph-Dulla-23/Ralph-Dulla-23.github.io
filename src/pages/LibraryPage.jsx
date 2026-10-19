@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import Lenis from 'lenis';
 import fallbackBooks, { statusConfig, allGenres } from '../data/books';
-import { watchPublicBooks, watchPublicGames } from '../lib/db';
+import { observePublicShelf } from '../services/publicShelfService';
 import { OWNER_UID } from '../lib/config';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
 import { useAuth } from '../context/AuthContext';
@@ -101,20 +101,15 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
     const readingRef = useScrollAnimation();
     const footerRef = useScrollAnimation();
 
-    // Subscribe to public books
+    // Subscribe to public shelf for books and games
     useEffect(() => {
-        const unsubscribe = watchPublicBooks(OWNER_UID, (liveBooks) => {
-            if (liveBooks && liveBooks.length > 0) {
-                setBooks(liveBooks);
+        const unsubscribe = observePublicShelf(OWNER_UID, (items) => {
+            const publicBooks = items.filter((item) => item.mediaType === 'book' || !item.mediaType);
+            const publicGames = items.filter((item) => item.mediaType === 'game');
+            if (publicBooks.length > 0) {
+                setBooks(publicBooks);
             }
-        });
-        return () => unsubscribe();
-    }, []);
-
-    // Subscribe to public games
-    useEffect(() => {
-        const unsubscribe = watchPublicGames(OWNER_UID, (liveGames) => {
-            setGames(liveGames || []);
+            setGames(publicGames);
             setGamesLoading(false);
         });
         return () => unsubscribe();

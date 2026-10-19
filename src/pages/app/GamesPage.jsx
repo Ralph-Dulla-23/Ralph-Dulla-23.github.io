@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
+import { Link, useSearchParams } from 'react-router-dom';
 import BottomTabs from '../../components/navigation/BottomTabs';
+import LibrarySegmentedSwitch from '../../components/library/LibrarySegmentedSwitch';
 import { useAuth } from '../../context/AuthContext';
 import {
     saveGame,
@@ -30,6 +32,9 @@ const statusTabs = [
     { key: 'finished', label: 'Finished' },
     { key: 'playing', label: 'Playing' },
     { key: 'backlog', label: 'Backlog' },
+    { key: 'paused', label: 'Paused' },
+    { key: 'dropped', label: 'Dropped' },
+    { key: 'replaying', label: 'Replaying' },
 ];
 
 const GamesPage = ({ darkMode, setDarkMode }) => {
@@ -37,6 +42,7 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
     const [games, setGames] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
+    const [searchParams, setSearchParams] = useSearchParams();
 
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -122,7 +128,7 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
 
     const stats = calculateGameStats(games);
 
-    const openAddModal = () => {
+    const openAddModal = useCallback(() => {
         setEditingGame(null);
         setTitle('');
         setPlatform('PC');
@@ -140,9 +146,9 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
         setSearchResults([]);
         setHasSearched(false);
         setIsModalOpen(true);
-    };
+    }, []);
 
-    const openEditModal = async (game) => {
+    const openEditModal = useCallback(async (game) => {
         const safeGameId = String(game.id || game.rawgId || game.title);
         setEditingGame({ ...game, id: safeGameId });
         setTitle(game.title || '');
@@ -161,14 +167,44 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
         setHasSearched(false);
 
         // Load private review from private subcollection
-        try {
-            const review = await getGamePrivateNotes(user.uid, safeGameId);
-            setPrivateReview(review);
-        } catch {
-            setPrivateReview('');
+        if (user) {
+            try {
+                const review = await getGamePrivateNotes(user.uid, safeGameId);
+                setPrivateReview(review);
+            } catch {
+                setPrivateReview('');
+            }
         }
         setIsModalOpen(true);
-    };
+    }, [user]);
+
+    // Query-based quick action consumption (UX-01)
+    const consumedActionRef = useRef(null);
+    useEffect(() => {
+        const action = searchParams.get('action');
+        if (!action || consumedActionRef.current === action) return;
+        consumedActionRef.current = action;
+
+        const timer = setTimeout(() => {
+            if (action === 'add') {
+                openAddModal();
+            } else if (action === 'log') {
+                const playingGame = games.find((g) => g.status === 'playing') || games[0];
+                if (playingGame) {
+                    openEditModal(playingGame);
+                } else {
+                    openAddModal();
+                }
+            }
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete('action');
+                return next;
+            }, { replace: true });
+        }, 0);
+
+        return () => clearTimeout(timer);
+    }, [searchParams, setSearchParams, games, openAddModal, openEditModal]);
 
     const handleSearchRAWG = async (e) => {
         e.preventDefault();
@@ -300,6 +336,9 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
 
     return (
         <BottomTabs title="Games Diary" darkMode={darkMode} setDarkMode={setDarkMode}>
+            {/* Library Switch */}
+            <LibrarySegmentedSwitch />
+
             {/* Header & Stats Banner */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div>
@@ -432,9 +471,9 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
                         return (
                             <div
                                 key={gameId}
-                                className="bg-white dark:bg-gray-900 border border-border dark:border-gray-800 rounded-2xl overflow-hidden shadow-sm flex flex-col justify-between group"
+                                className="bg-white dark:bg-gray-900 border border-border dark:border-gray-800 rounded-2xl overflow-hidden shadow-sm flex flex-col justify-between group hover:border-primary/40 dark:hover:border-gray-700 transition-colors"
                             >
-                                <div>
+                                <Link to={`/app/games/${gameId}`} className="block flex-1 cursor-pointer">
                                     <div className="relative aspect-[16/9] bg-gray-100 dark:bg-gray-800 overflow-hidden">
                                         {game.cover ? (
                                             <img
@@ -460,7 +499,7 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
                                     </div>
 
                                     <div className="p-4">
-                                        <h3 className="font-semibold text-sm text-primary dark:text-gray-100 truncate">
+                                        <h3 className="font-semibold text-sm text-primary dark:text-gray-100 truncate group-hover:text-blue-500 transition-colors">
                                             {game.title}
                                         </h3>
                                         <div className="flex items-center gap-2 text-xs text-secondary dark:text-gray-400 mt-1">
@@ -486,18 +525,24 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
                                             </p>
                                         )}
                                     </div>
-                                </div>
+                                </Link>
 
                                 <div className="px-4 pb-3 pt-1 border-t border-border/50 dark:border-gray-800/50 flex items-center justify-end gap-2">
                                     <button
-                                        onClick={() => openEditModal({ ...game, id: gameId })}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            openEditModal({ ...game, id: gameId });
+                                        }}
                                         className="p-1.5 text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 cursor-pointer"
                                         title="Edit Game"
                                     >
                                         <BsPencilSquare className="w-4 h-4" />
                                     </button>
                                     <button
-                                        onClick={() => handleDelete(gameId)}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDelete(gameId);
+                                        }}
                                         className="p-1.5 text-secondary dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 cursor-pointer"
                                         title="Delete Game"
                                     >

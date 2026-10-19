@@ -10,9 +10,20 @@ import {
     onSnapshot,
     serverTimestamp,
 } from 'firebase/firestore';
-import { db } from './firebase';
-import { OWNER_UID } from './config';
-import fallbackBooks from '../data/books';
+import { db } from './firebase.js';
+import { OWNER_UID } from './config.js';
+import fallbackBooks from '../data/books.js';
+import { createDiaryRepository } from '../domain/repository/diaryRepository.js';
+import { toPublicShelfItem, toPublicHighlight } from '../domain/publicProjection.js';
+
+export { createDiaryRepository };
+
+/**
+ * Returns a canonical v2 DiaryRepository bound to the verified owner UID.
+ */
+export function getDiaryRepository(uid) {
+    return createDiaryRepository({ db, uid: uid || OWNER_UID });
+}
 
 /* =========================================================================
    ID SANITIZATION & LOCAL STORAGE MIRROR
@@ -23,10 +34,16 @@ const LS_BOOKS_KEY = 'diary_local_books_v1';
 const LS_SESSIONS_KEY = 'diary_local_sessions_v1';
 const LS_GAME_NOTES_KEY = 'diary_local_game_notes_v1';
 const LS_BOOK_NOTES_KEY = 'diary_local_book_notes_v1';
+const LS_JOURNAL_KEY = 'diary_local_journal_v1';
+const LS_PUBLIC_SHELF_KEY = 'diary_public_shelf_v1';
+const LS_PUBLIC_HIGHLIGHTS_KEY = 'diary_public_highlights_v1';
 const LS_DELETED_IDS_KEY = 'diary_deleted_ids_v1';
 
 const gameSubscribers = new Set();
 const bookSubscribers = new Set();
+const journalSubscribers = new Set();
+const publicShelfSubscribers = new Set();
+const publicHighlightsSubscribers = new Set();
 
 function notifyGameSubscribers() {
     gameSubscribers.forEach((cb) => {
@@ -48,6 +65,36 @@ function notifyBookSubscribers() {
     });
 }
 
+function notifyJournalSubscribers() {
+    journalSubscribers.forEach((cb) => {
+        try {
+            cb();
+        } catch (err) {
+            console.error('Error in journal subscriber:', err);
+        }
+    });
+}
+
+function notifyPublicShelfSubscribers() {
+    publicShelfSubscribers.forEach((cb) => {
+        try {
+            cb();
+        } catch (err) {
+            console.error('Error in public shelf subscriber:', err);
+        }
+    });
+}
+
+function notifyPublicHighlightsSubscribers() {
+    publicHighlightsSubscribers.forEach((cb) => {
+        try {
+            cb();
+        } catch (err) {
+            console.error('Error in public highlights subscriber:', err);
+        }
+    });
+}
+
 /**
  * Converts any raw ID into a safe, non-empty Firestore document ID string.
  * Prevents doc() / collection() from throwing on undefined/null/slashes.
@@ -61,26 +108,35 @@ export function sanitizeId(rawId, fallbackPrefix = 'item') {
         : `${fallbackPrefix}_${Date.now()}`;
 }
 
+const memoryStorage = new Map();
+
 function readJson(key, fallback) {
     try {
-        const raw = localStorage.getItem(key);
-        if (!raw) return fallback;
-        const parsed = JSON.parse(raw);
-        return parsed ?? fallback;
+        if (typeof localStorage !== 'undefined') {
+            const raw = localStorage.getItem(key);
+            if (!raw) return fallback;
+            const parsed = JSON.parse(raw);
+            return parsed ?? fallback;
+        }
+        return memoryStorage.has(key) ? memoryStorage.get(key) : fallback;
     } catch {
-        return fallback;
+        return memoryStorage.has(key) ? memoryStorage.get(key) : fallback;
     }
 }
 
 function writeJson(key, value) {
     try {
-        localStorage.setItem(key, JSON.stringify(value));
-    } catch (err) {
-        console.warn(`Failed to write ${key} to localStorage:`, err);
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(key, JSON.stringify(value));
+            return;
+        }
+        memoryStorage.set(key, value);
+    } catch {
+        memoryStorage.set(key, value);
     }
 }
 
-function getDeletedIdsSet() {
+export function getDeletedIdsSet() {
     const arr = readJson(LS_DELETED_IDS_KEY, []);
     return new Set(Array.isArray(arr) ? arr : []);
 }
@@ -172,7 +228,9 @@ function buildMergedBooks(cloudBooks = []) {
         }
     });
 
-    const list = Array.from(mergedMap.values());
+    const list = Array.from(mergedMap.values()).map(
+        ({ privateNotes: _pn, logs: _logs, ...publicBook }) => publicBook // eslint-disable-line no-unused-vars
+    );
     list.sort((a, b) => {
         if (a.status === 'reading' && b.status !== 'reading') return -1;
         if (b.status === 'reading' && a.status !== 'reading') return 1;
@@ -875,6 +933,26 @@ export async function syncLocalToCloud(uid) {
             }
             result.games++;
         }
+
+        // Propagate pending offline deletions to Firestore
+        const deletedIds = getDeletedIdsSet();
+        const successfullyDeleted = [];
+        for (const deletedId of deletedIds) {
+            try {
+                await deleteDoc(doc(db, 'users', safeUid, 'books', deletedId, 'private', 'notes')).catch(() => {});
+                await deleteDoc(doc(db, 'users', safeUid, 'books', deletedId)).catch(() => {});
+                await deleteDoc(doc(db, 'users', safeUid, 'games', deletedId, 'private', 'notes')).catch(() => {});
+                await deleteDoc(doc(db, 'users', safeUid, 'games', deletedId)).catch(() => {});
+                successfullyDeleted.push(deletedId);
+            } catch {
+                // If deletion fails, keep in deletedIds to retry next sync
+            }
+        }
+        if (successfullyDeleted.length > 0) {
+            const currentDeleted = getDeletedIdsSet();
+            successfullyDeleted.forEach((id) => currentDeleted.delete(id));
+            writeJson(LS_DELETED_IDS_KEY, Array.from(currentDeleted));
+        }
     } catch (err) {
         result.error = err?.code ? `${err.code}: ${err.message}` : err?.message || String(err);
     }
@@ -901,9 +979,13 @@ export async function pullBooksFromCloud(uid) {
         const localBooks = readJson(LS_BOOKS_KEY, {});
         const localNotes = readJson(LS_BOOK_NOTES_KEY, {});
         const allSessions = readJson(LS_SESSIONS_KEY, {});
+        const deletedIds = getDeletedIdsSet();
 
         for (const docSnap of snap.docs) {
             const id = docSnap.id;
+            if (deletedIds.has(id)) {
+                continue;
+            }
             const data = docSnap.data();
             localBooks[id] = { ...data, id };
             unmarkDeletedId(id);
@@ -960,9 +1042,13 @@ export async function pullGamesFromCloud(uid) {
         const snap = await getDocs(collection(db, 'users', safeUid, 'games'));
         const localGames = readJson(LS_GAMES_KEY, {});
         const localNotes = readJson(LS_GAME_NOTES_KEY, {});
+        const deletedIds = getDeletedIdsSet();
 
         for (const docSnap of snap.docs) {
             const id = docSnap.id;
+            if (deletedIds.has(id)) {
+                continue;
+            }
             const data = docSnap.data();
             localGames[id] = { ...data, id };
             unmarkDeletedId(id);
@@ -1021,6 +1107,421 @@ export function calculateGameStats(games = []) {
         avgRating,
         byYear,
         genres,
+    };
+}
+
+/* =========================================================================
+   JOURNAL & SESSION HELPERS (Phase 3)
+   ========================================================================= */
+
+/**
+ * Saves or updates a private journal entry.
+ */
+export async function saveJournalEntry(uid, entry) {
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    const id = sanitizeId(entry?.id || Date.now(), 'journal');
+    const nowIso = new Date().toISOString();
+    const cleanEntry = {
+        schemaVersion: 2,
+        id,
+        title: entry?.title || '',
+        body: entry?.body || '',
+        type: entry?.type || 'reflection',
+        date: entry?.date || nowIso.split('T')[0],
+        linkedMediaId: entry?.linkedMediaId || null,
+        linkedMediaType: entry?.linkedMediaType || null,
+        visibility: 'private',
+        createdAt: entry?.createdAt || nowIso,
+        updatedAt: nowIso,
+    };
+
+    const localJournal = readJson(LS_JOURNAL_KEY, {});
+    localJournal[id] = cleanEntry;
+    writeJson(LS_JOURNAL_KEY, localJournal);
+    unmarkDeletedId(id);
+    notifyJournalSubscribers();
+
+    if (db) {
+        try {
+            const docRef = doc(db, 'users', safeUid, 'journalEntries', id);
+            await setDoc(docRef, { ...cleanEntry, updatedAt: serverTimestamp() }, { merge: true });
+        } catch (err) {
+            console.warn('Firestore journal save deferred (saved locally):', err.message);
+        }
+    }
+
+    return id;
+}
+
+/**
+ * Deletes a journal entry.
+ */
+export async function deleteJournalEntry(uid, entryId) {
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    const id = sanitizeId(entryId, 'journal');
+
+    const localJournal = readJson(LS_JOURNAL_KEY, {});
+    delete localJournal[id];
+    writeJson(LS_JOURNAL_KEY, localJournal);
+    markDeletedId(id);
+    notifyJournalSubscribers();
+
+    if (db) {
+        try {
+            await deleteDoc(doc(db, 'users', safeUid, 'journalEntries', id));
+        } catch (err) {
+            console.warn('Firestore journal delete deferred (deleted locally):', err.message);
+        }
+    }
+}
+
+/**
+ * Real-time listener for private journal entries.
+ */
+export function watchJournalEntries(ownerUid, onUpdate) {
+    let latestCloudEntries = [];
+    let currentMetadata = { hasPendingWrites: false, fromCache: false };
+
+    const emit = () => {
+        const local = readJson(LS_JOURNAL_KEY, {});
+        const merged = new Map();
+        latestCloudEntries.forEach((e) => {
+            if (e && e.id) merged.set(String(e.id), e);
+        });
+        Object.values(local).forEach((e) => {
+            if (e && e.id) merged.set(String(e.id), e);
+        });
+        const list = Array.from(merged.values()).sort((a, b) =>
+            String(b.date || b.createdAt || '').localeCompare(String(a.date || a.createdAt || ''))
+        );
+        onUpdate(list, currentMetadata);
+    };
+
+    journalSubscribers.add(emit);
+    emit();
+
+    if (!db || !ownerUid) {
+        return () => {
+            journalSubscribers.delete(emit);
+        };
+    }
+
+    const safeOwnerUid = sanitizeId(ownerUid, 'user');
+    const q = collection(db, 'users', safeOwnerUid, 'journalEntries');
+
+    const unsubFirestore = onSnapshot(
+        q,
+        (snapshot) => {
+            currentMetadata = {
+                hasPendingWrites: Boolean(snapshot.metadata?.hasPendingWrites),
+                fromCache: Boolean(snapshot.metadata?.fromCache),
+            };
+            latestCloudEntries = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+            emit();
+        },
+        (error) => {
+            console.warn('Firestore journal listener fallback to local mirror:', error.message);
+            emit();
+        }
+    );
+
+    return () => {
+        journalSubscribers.delete(emit);
+        unsubFirestore();
+    };
+}
+
+/**
+ * Fetches all sessions (reading and gaming) across all media items.
+ * Prioritizes canonical users/{uid}/sessions with legacy subcollection fallback and ID deduplication.
+ */
+export async function getAllSessions(uid) {
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    const allLocal = readJson(LS_SESSIONS_KEY, {});
+    const sessionMap = new Map();
+
+    // 1. Fetch canonical v2 sessions first (priority)
+    if (db && uid) {
+        try {
+            const canonicalSnap = await getDocs(collection(db, 'users', safeUid, 'sessions'));
+            canonicalSnap.docs.forEach((d) => {
+                sessionMap.set(d.id, { id: d.id, ...d.data() });
+            });
+        } catch (err) {
+            console.warn('Could not fetch canonical sessions:', err.message);
+        }
+    }
+
+    // 2. Fetch legacy sessions from books/{bookId}/sessions (backward compatibility)
+    if (db && uid) {
+        try {
+            const booksSnap = await getDocs(collection(db, 'users', safeUid, 'books'));
+            for (const bDoc of booksSnap.docs) {
+                const sSnap = await getDocs(collection(db, 'users', safeUid, 'books', bDoc.id, 'sessions'));
+                sSnap.docs.forEach((d) => {
+                    if (!sessionMap.has(d.id)) {
+                        sessionMap.set(d.id, { id: d.id, ...d.data(), mediaId: bDoc.id, mediaType: 'book' });
+                    }
+                });
+            }
+        } catch {
+            // fallback to local mirror
+        }
+    }
+
+    // 3. Fallback to local storage sessions if not present
+    Object.entries(allLocal).forEach(([mediaId, arr]) => {
+        if (Array.isArray(arr)) {
+            arr.forEach((s) => {
+                if (s && s.id && !sessionMap.has(String(s.id))) {
+                    sessionMap.set(String(s.id), { ...s, mediaId });
+                }
+            });
+        }
+    });
+
+    return Array.from(sessionMap.values()).sort((a, b) =>
+        String(b.startedAt || '').localeCompare(String(a.startedAt || ''))
+    );
+}
+
+/**
+ * Subscribes to canonical sessions with real-time updates and fallback.
+ */
+export function observeCanonicalSessions(uid, callback) {
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    if (db && uid) {
+        try {
+            const repo = getDiaryRepository(safeUid);
+            return repo.observeSessions({}, (snapshot) => {
+                callback(snapshot.sessions || []);
+            });
+        } catch (err) {
+            console.warn('observeCanonicalSessions error, falling back:', err.message);
+        }
+    }
+    // Fallback to local snapshot
+    const allLocal = readJson(LS_SESSIONS_KEY, {});
+    const list = [];
+    Object.values(allLocal).forEach((arr) => {
+        if (Array.isArray(arr)) list.push(...arr);
+    });
+    callback(list);
+    return () => {};
+}
+
+/* =========================================================================
+   PUBLIC SHELF & HIGHLIGHTS PROJECTION HELPERS (Phase 4)
+   ========================================================================= */
+
+/**
+ * Publishes a sanitized snapshot of a book or game to the public shelf.
+ */
+export async function publishLibraryItem(uid, item, options = {}) {
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    const id = sanitizeId(item?.id || Date.now(), 'item');
+    const sanitized = toPublicShelfItem(item, options);
+
+    const localShelf = readJson(LS_PUBLIC_SHELF_KEY, {});
+    localShelf[id] = sanitized;
+    writeJson(LS_PUBLIC_SHELF_KEY, localShelf);
+    notifyPublicShelfSubscribers();
+
+    if (db) {
+        try {
+            const shelfRef = doc(db, 'publicProfiles', safeUid, 'shelf', id);
+            await setDoc(shelfRef, { ...sanitized, updatedAt: serverTimestamp() }, { merge: true });
+        } catch (err) {
+            console.warn('Firestore publishLibraryItem deferred (saved locally):', err.message);
+        }
+    }
+
+    return sanitized;
+}
+
+/**
+ * Removes an item from the public shelf.
+ */
+export async function unpublishLibraryItem(uid, itemId) {
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    const id = sanitizeId(itemId, 'item');
+
+    const localShelf = readJson(LS_PUBLIC_SHELF_KEY, {});
+    delete localShelf[id];
+    writeJson(LS_PUBLIC_SHELF_KEY, localShelf);
+    notifyPublicShelfSubscribers();
+
+    if (db) {
+        try {
+            const shelfRef = doc(db, 'publicProfiles', safeUid, 'shelf', id);
+            await deleteDoc(shelfRef);
+        } catch (err) {
+            console.warn('Firestore unpublishLibraryItem deferred (deleted locally):', err.message);
+        }
+    }
+}
+
+/**
+ * Checks if a library item is currently published to the public shelf.
+ */
+export function isItemPublished(uid, itemId) {
+    if (!itemId) return false;
+    const localShelf = readJson(LS_PUBLIC_SHELF_KEY, {});
+    return Boolean(localShelf[String(itemId)]);
+}
+
+/**
+ * Real-time listener for public shelf items.
+ * Anyone can read (signed-in or signed-out).
+ */
+export function watchPublicShelf(ownerUid, onUpdate) {
+    let latestCloudItems = [];
+    const emit = () => {
+        const local = readJson(LS_PUBLIC_SHELF_KEY, {});
+        const merged = new Map();
+        latestCloudItems.forEach((item) => {
+            if (item && item.id) merged.set(String(item.id), item);
+        });
+        Object.entries(local).forEach(([id, item]) => {
+            if (item) merged.set(String(id), { ...item, id });
+        });
+        const list = Array.from(merged.values());
+        onUpdate(list);
+    };
+
+    publicShelfSubscribers.add(emit);
+    emit();
+
+    if (!db || !ownerUid) {
+        return () => {
+            publicShelfSubscribers.delete(emit);
+        };
+    }
+
+    const safeOwnerUid = sanitizeId(ownerUid, 'user');
+    const q = collection(db, 'publicProfiles', safeOwnerUid, 'shelf');
+
+    const unsubFirestore = onSnapshot(
+        q,
+        (snapshot) => {
+            latestCloudItems = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+            emit();
+        },
+        (error) => {
+            console.warn('Firestore public shelf listener fallback to local mirror:', error.message);
+            emit();
+        }
+    );
+
+    return () => {
+        publicShelfSubscribers.delete(emit);
+        unsubFirestore();
+    };
+}
+
+/**
+ * Publishes a highlight / quote to public highlights.
+ */
+export async function publishHighlight(uid, entry, options = {}) {
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    const id = sanitizeId(entry?.id || Date.now(), 'highlight');
+    const sanitized = toPublicHighlight(entry, options);
+
+    const localHighlights = readJson(LS_PUBLIC_HIGHLIGHTS_KEY, {});
+    localHighlights[id] = sanitized;
+    writeJson(LS_PUBLIC_HIGHLIGHTS_KEY, localHighlights);
+    notifyPublicHighlightsSubscribers();
+
+    if (db) {
+        try {
+            const docRef = doc(db, 'publicProfiles', safeUid, 'highlights', id);
+            await setDoc(docRef, { ...sanitized, updatedAt: serverTimestamp() }, { merge: true });
+        } catch (err) {
+            console.warn('Firestore publishHighlight deferred (saved locally):', err.message);
+        }
+    }
+
+    return sanitized;
+}
+
+/**
+ * Removes a highlight from public highlights.
+ */
+export async function unpublishHighlight(uid, highlightId) {
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    const id = sanitizeId(highlightId, 'highlight');
+
+    const localHighlights = readJson(LS_PUBLIC_HIGHLIGHTS_KEY, {});
+    delete localHighlights[id];
+    writeJson(LS_PUBLIC_HIGHLIGHTS_KEY, localHighlights);
+    notifyPublicHighlightsSubscribers();
+
+    if (db) {
+        try {
+            const docRef = doc(db, 'publicProfiles', safeUid, 'highlights', id);
+            await deleteDoc(docRef);
+        } catch (err) {
+            console.warn('Firestore unpublishHighlight deferred (deleted locally):', err.message);
+        }
+    }
+}
+
+/**
+ * Checks if a highlight is currently published.
+ */
+export function isHighlightPublished(uid, highlightId) {
+    if (!highlightId) return false;
+    const localHighlights = readJson(LS_PUBLIC_HIGHLIGHTS_KEY, {});
+    return Boolean(localHighlights[String(highlightId)]);
+}
+
+/**
+ * Real-time listener for public highlights.
+ */
+export function watchPublicHighlights(ownerUid, onUpdate) {
+    let latestCloudHighlights = [];
+    const emit = () => {
+        const local = readJson(LS_PUBLIC_HIGHLIGHTS_KEY, {});
+        const merged = new Map();
+        latestCloudHighlights.forEach((h) => {
+            if (h && h.id) merged.set(String(h.id), h);
+        });
+        Object.entries(local).forEach(([id, h]) => {
+            if (h) merged.set(String(id), { ...h, id });
+        });
+        const list = Array.from(merged.values()).sort((a, b) =>
+            String(b.publishedAt || '').localeCompare(String(a.publishedAt || ''))
+        );
+        onUpdate(list);
+    };
+
+    publicHighlightsSubscribers.add(emit);
+    emit();
+
+    if (!db || !ownerUid) {
+        return () => {
+            publicHighlightsSubscribers.delete(emit);
+        };
+    }
+
+    const safeOwnerUid = sanitizeId(ownerUid, 'user');
+    const q = collection(db, 'publicProfiles', safeOwnerUid, 'highlights');
+
+    const unsubFirestore = onSnapshot(
+        q,
+        (snapshot) => {
+            latestCloudHighlights = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+            emit();
+        },
+        (error) => {
+            console.warn('Firestore public highlights listener fallback to local mirror:', error.message);
+            emit();
+        }
+    );
+
+    return () => {
+        publicHighlightsSubscribers.delete(emit);
+        unsubFirestore();
     };
 }
 

@@ -7,27 +7,62 @@ service cloud.firestore {
           && uid == 'B0p0XBPscBNF4Dchuk1IsOACrvk2';
     }
 
-    match /users/{uid} {
-      // Games: public read for owner's documents, owner-only write
-      match /games/{id} {
+    // Public Profiles (Phase 1 & Phase 4 Public Projections: shelf, highlights)
+    // Conforms to Section 5 (SEC-01, SEC-02) of DIARY_STABILIZATION_IMPLEMENTATION.md
+    match /publicProfiles/{uid} {
+      allow read: if uid == 'B0p0XBPscBNF4Dchuk1IsOACrvk2';
+      allow write: if isOwner(uid);
+
+      match /shelf/{itemId} {
         allow read: if uid == 'B0p0XBPscBNF4Dchuk1IsOACrvk2';
         allow write: if isOwner(uid);
+      }
+      match /highlights/{highlightId} {
+        allow read: if uid == 'B0p0XBPscBNF4Dchuk1IsOACrvk2';
+        allow write: if isOwner(uid);
+      }
+    }
+
+    match /users/{uid} {
+      // Legacy games: owner-only read and write
+      match /games/{id} {
+        allow read, write: if isOwner(uid);
         match /private/{doc} {
           allow read, write: if isOwner(uid);
         }
       }
 
-      // Books and reading sessions: public read for owner's documents, owner-only write
+      // Legacy books and sessions: owner-only read and write
       match /books/{id} {
-        allow read: if uid == 'B0p0XBPscBNF4Dchuk1IsOACrvk2';
-        allow write: if isOwner(uid);
+        allow read, write: if isOwner(uid);
         match /sessions/{sid} {
-          allow read: if uid == 'B0p0XBPscBNF4Dchuk1IsOACrvk2';
-          allow write: if isOwner(uid);
+          allow read, write: if isOwner(uid);
         }
         match /private/{doc} {
           allow read, write: if isOwner(uid);
         }
+      }
+
+      // Journal entries: strictly owner-only read and write
+      match /journal/{entryId} {
+        allow read, write: if isOwner(uid);
+      }
+      match /journalEntries/{entryId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Canonical v2 libraryItems, attempts, sessions, and historical aggregates: strictly owner-only
+      match /libraryItems/{itemId} {
+        allow read, write: if isOwner(uid);
+      }
+      match /attempts/{attemptId} {
+        allow read, write: if isOwner(uid);
+      }
+      match /sessions/{sessionId} {
+        allow read, write: if isOwner(uid);
+      }
+      match /historicalAggregates/{id} {
+        allow read, write: if isOwner(uid);
       }
     }
   }

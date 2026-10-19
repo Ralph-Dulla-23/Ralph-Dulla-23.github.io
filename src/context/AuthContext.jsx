@@ -8,80 +8,30 @@ import {
 import { auth } from '../lib/firebase';
 import { OWNER_UID, isOwner } from '../lib/config';
 
-const AUTH_CACHE_KEY = 'diary_cached_owner_user';
-
-function getCachedUser() {
-    try {
-        const raw = localStorage.getItem(AUTH_CACHE_KEY);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.uid) {
-            return { uid: parsed.uid, email: parsed.email || '' };
-        }
-    } catch {
-        // Ignore storage parse errors
-    }
-    return null;
-}
-
-function saveCachedUser(u) {
-    try {
-        if (!u || !u.uid) return;
-        localStorage.setItem(
-            AUTH_CACHE_KEY,
-            JSON.stringify({
-                uid: u.uid,
-                email: u.email || '',
-            })
-        );
-    } catch {
-        // Ignore storage write errors
-    }
-}
-
-function clearCachedUser() {
-    try {
-        localStorage.removeItem(AUTH_CACHE_KEY);
-    } catch {
-        // Ignore storage errors
-    }
-}
-
 const AuthContext = createContext({
     user: null,
     loading: true,
     isOwner: false,
+    ownerUid: '',
     login: async () => {},
     logout: async () => {},
 });
 
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(() => getCachedUser());
-    const [loading, setLoading] = useState(() => {
-        if (getCachedUser()) return false;
-        return Boolean(auth);
-    });
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(Boolean(auth));
 
     useEffect(() => {
         if (!auth) return;
 
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-            if (currentUser) {
-                saveCachedUser(currentUser);
-                setUser(currentUser);
-            } else {
-                const cached = getCachedUser();
-                if (cached) {
-                    setUser({ uid: cached.uid, email: cached.email });
-                } else {
-                    setUser(null);
-                }
-            }
+            setUser(currentUser ?? null);
             setLoading(false);
         });
 
         return () => unsubscribe();
     }, []);
+
 
     const login = async (email, password) => {
         if (!auth) {
@@ -89,14 +39,12 @@ export const AuthProvider = ({ children }) => {
         }
         const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
         if (cred?.user) {
-            saveCachedUser(cred.user);
             setUser(cred.user);
         }
         return cred;
     };
 
     const logout = async () => {
-        clearCachedUser();
         setUser(null);
         if (!auth) return;
         return firebaseSignOut(auth);
@@ -105,8 +53,8 @@ export const AuthProvider = ({ children }) => {
     const value = {
         user,
         loading,
-        isOwner: Boolean(user && (isOwner(user) || !OWNER_UID)),
-        ownerUid: OWNER_UID || user?.uid || '',
+        isOwner: Boolean(user && isOwner(user)),
+        ownerUid: OWNER_UID,
         login,
         logout,
     };
@@ -125,3 +73,4 @@ AuthProvider.propTypes = {
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);
 export default AuthContext;
+

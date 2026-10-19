@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
 import fallbackBooks, { statusConfig } from '../data/books';
-import { watchPublicBooks } from '../lib/db';
+import { observePublicShelf } from '../services/publicShelfService';
 import { OWNER_UID } from '../lib/config';
 import { Link } from 'react-router-dom';
 import { lenisRef } from '../App';
@@ -12,9 +12,10 @@ const Library = () => {
     const [books, setBooks] = useState(fallbackBooks);
 
     useEffect(() => {
-        const unsubscribe = watchPublicBooks(OWNER_UID, (liveBooks) => {
-            if (liveBooks && liveBooks.length > 0) {
-                setBooks(liveBooks);
+        const unsubscribe = observePublicShelf(OWNER_UID, (items) => {
+            const publicBooks = items.filter((item) => item.mediaType === 'book' || !item.mediaType);
+            if (publicBooks && publicBooks.length > 0) {
+                setBooks(publicBooks);
             }
         });
         return () => unsubscribe();

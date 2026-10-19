@@ -11,7 +11,7 @@ import {
     persistentMultipleTabManager,
     getFirestore,
 } from 'firebase/firestore';
-import { firebaseConfig, isFirebaseConfigured } from './config';
+import { firebaseConfig, isFirebaseConfigured } from './config.js';
 
 let app = null;
 let auth = null;

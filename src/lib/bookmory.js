@@ -1,5 +1,9 @@
 import { saveBook, addReadingSession, sanitizeId } from './db';
 import { searchBooks } from './openlibrary';
+import { parseBookmoryMarkdownPure } from '../domain/bookmoryParser';
+import { previewMigrationBatch, detectCollisions, generateRollbackManifest, executeMigrationBatch } from '../domain/migrationEngine';
+
+export { parseBookmoryMarkdownPure, previewMigrationBatch, detectCollisions, generateRollbackManifest, executeMigrationBatch };
 
 /**
  * Bookmory export importer.
@@ -149,7 +153,7 @@ export async function importBookmoryBooks(uid, parsedBooks, existingBooks = [], 
                 }
             }
 
-            const pages = p.pages || existing?.pages || 350;
+            const pages = p.pages || existing?.pages || null;
             const id = sanitizeId(existing?.id || existing?.coverId || coverId || normTitle(p.title), 'book');
             const completed = p.status === 'completed';
 
@@ -165,7 +169,7 @@ export async function importBookmoryBooks(uid, parsedBooks, existingBooks = [], 
                     cover,
                     coverId,
                     pages,
-                    currentPage: completed ? pages : existing?.currentPage || 0,
+                    currentPage: completed ? (pages || 0) : existing?.currentPage || 0,
                     status: p.status,
                     rating: p.rating,
                     favorite: p.favorite,

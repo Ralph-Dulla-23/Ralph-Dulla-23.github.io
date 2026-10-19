@@ -7,23 +7,70 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Dependencies
+node_modules/
+
+# Production & Build outputs
+dist/
+dist-ssr/
+build/
 *.local
 bundle-stats.html
+
+# Environment variables & secrets
 .env
-.env*.local
+.env.local
+.env.*.local
+!.env.example
+
+# Mobile & App binaries / build artifacts
 *.apk
+*.aab
 fix-dns.bat
+
+# Private user archives, backups, and dumps (DATA-01, SEC-01)
+scripts/legacy-books-archive.json
+diary-backup-*.json
+*.backup*.json
+*user-export*.json
+
+# Documentation & Notes
+*.md
+!README.md
+docs/
+
+# Testing, Coverage & Screenshots
+tests/
+coverage/
+.nyc_output/
+*.lcov
+test-results/
+playwright-report/
+screenshots/
+
+# Cache directories
+.cache/
+.vite/
+.eslintcache
+*.tsbuildinfo
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+!.vscode/settings.json
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini

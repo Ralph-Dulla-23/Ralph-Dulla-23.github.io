@@ -1,18 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
+import { Link, useSearchParams } from 'react-router-dom';
 import BottomTabs from '../../components/navigation/BottomTabs';
+import LibrarySegmentedSwitch from '../../components/library/LibrarySegmentedSwitch';
 import { useAuth } from '../../context/AuthContext';
 import {
     saveBook,
     deleteBook,
     watchPublicBooks,
-    seedExistingBooks,
     getBookPrivateNotes,
     syncLocalToCloud,
     pullBooksFromCloud,
+    getDiaryRepository,
+    saveJournalEntry,
 } from '../../lib/db';
 import { searchBooks } from '../../lib/openlibrary';
-import { parseBookmoryMarkdown, importBookmoryBooks } from '../../lib/bookmory';
+import {
+    parseBookmoryMarkdown,
+    parseBookmoryMarkdownPure,
+    previewMigrationBatch,
+    executeMigrationBatch,
+} from '../../lib/bookmory';
 import ReadingTimerModal from '../../components/books/ReadingTimerModal';
 import {
     BsPlusLg,
@@ -25,8 +33,9 @@ import {
     BsHeartFill,
     BsCloudArrowUp,
     BsCloudDownload,
-    BsCheck2Circle,
     BsFileEarmarkArrowUp,
+    BsExclamationTriangle,
+    BsX,
 } from 'react-icons/bs';
 
 const statusTabs = [
@@ -34,6 +43,9 @@ const statusTabs = [
     { key: 'reading', label: 'Reading' },
     { key: 'completed', label: 'Completed' },
     { key: 'want-to-read', label: 'To Read' },
+    { key: 'paused', label: 'Paused' },
+    { key: 'dropped', label: 'Dropped' },
+    { key: 'rereading', label: 'Rereading' },
 ];
 
 const BooksPage = ({ darkMode, setDarkMode }) => {
@@ -41,6 +53,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
     const [books, setBooks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
+    const [librarySearch, setLibrarySearch] = useState('');
 
     // Add / Edit Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -66,16 +79,15 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
     const [searching, setSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
 
-    // Seeding state
-    const [seeding, setSeeding] = useState(false);
-    const [seedSuccess, setSeedSuccess] = useState(false);
-
     // Bookmory import + cloud sync state
     const importInputRef = useRef(null);
     const [importing, setImporting] = useState(false);
+    const [importPreview, setImportPreview] = useState(null);
+    const [executingImport, setExecutingImport] = useState(false);
     const [syncing, setSyncing] = useState(false);
     const [pulling, setPulling] = useState(false);
     const [importMsg, setImportMsg] = useState(null);
+    const [searchParams, setSearchParams] = useSearchParams();
 
     useEffect(() => {
         if (!user) return;
@@ -84,31 +96,6 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
             setLoading(false);
         });
         return () => unsubscribe();
-    }, [user]);
-
-    // Auto-sync 51 Bookmory books into Firestore in background when owner opens page
-    useEffect(() => {
-        if (!user) return;
-        const autoSyncKey = 'diary_auto_synced_51_books_v2';
-        if (localStorage.getItem(autoSyncKey)) return;
-
-        let cancelled = false;
-        const timer = setTimeout(async () => {
-            try {
-                const res = await seedExistingBooks(user.uid);
-                if (!cancelled && res?.count > 0) {
-                    localStorage.setItem(autoSyncKey, 'true');
-                    console.log(`Auto-synced ${res.count} Bookmory books to Firestore.`);
-                }
-            } catch (err) {
-                console.warn('Auto-sync deferred:', err.message);
-            }
-        }, 1500);
-
-        return () => {
-            cancelled = true;
-            clearTimeout(timer);
-        };
     }, [user]);
 
     // Live debounced auto-search (350ms)
@@ -177,6 +164,34 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
         setHasSearched(false);
         setIsModalOpen(true);
     };
+
+    // Query-based quick action consumption (UX-01)
+    const consumedActionRef = useRef(null);
+    useEffect(() => {
+        const action = searchParams.get('action');
+        if (!action || consumedActionRef.current === action) return;
+        consumedActionRef.current = action;
+
+        const timer = setTimeout(() => {
+            if (action === 'add') {
+                openAddModal();
+            } else if (action === 'log') {
+                const readingBook = books.find((b) => b.status === 'reading') || books[0];
+                if (readingBook) {
+                    setTimerBook(readingBook);
+                } else {
+                    openAddModal();
+                }
+            }
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete('action');
+                return next;
+            }, { replace: true });
+        }, 0);
+
+        return () => clearTimeout(timer);
+    }, [searchParams, setSearchParams, books]);
 
     const openEditModal = async (book) => {
         const safeBookId = String(
@@ -285,30 +300,6 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
         }
     };
 
-    const handleSeed = async () => {
-        if (!window.confirm('Sync all 51 Bookmory books into Firestore database?')) return;
-        setSeeding(true);
-        setImportMsg({ type: 'ok', text: 'Syncing 51 books to Firebase...' });
-        try {
-            const { count, sessionsCount } = await seedExistingBooks(user.uid, (done, total, bookTitle) => {
-                setImportMsg({
-                    type: 'ok',
-                    text: `Syncing books to Firebase: ${done}/${total}${bookTitle ? ` (${bookTitle})` : ''}`,
-                });
-            });
-            setSeedSuccess(true);
-            setImportMsg({
-                type: 'ok',
-                text: `Successfully synced ${count} books and ${sessionsCount} reading sessions to Firebase!`,
-            });
-            setTimeout(() => setSeedSuccess(false), 6000);
-        } catch (err) {
-            setImportMsg({ type: 'error', text: 'Failed to sync books: ' + err.message });
-        } finally {
-            setSeeding(false);
-        }
-    };
-
     const reportSync = async (prefix = '') => {
         const res = await syncLocalToCloud(user.uid);
         if (res.error) {
@@ -365,35 +356,152 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
         e.target.value = '';
         if (!files.length) return;
         setImporting(true);
-        setImportMsg({ type: 'ok', text: `Reading ${files.length} file(s)...` });
+        setImportMsg({ type: 'ok', text: `Analyzing ${files.length} file(s)...` });
         try {
-            const parsed = [];
+            const candidates = [];
             for (const f of files) {
-                const p = parseBookmoryMarkdown(await f.text());
-                if (p) parsed.push(p);
+                const text = await f.text();
+                const pure = parseBookmoryMarkdownPure(text);
+                if (pure && pure.item) {
+                    candidates.push(pure);
+                } else {
+                    const fallback = parseBookmoryMarkdown(text);
+                    if (fallback) {
+                        candidates.push({
+                            item: {
+                                schemaVersion: 2,
+                                id: fallback.id || fallback.title.replace(/\s+/g, '-').toLowerCase(),
+                                mediaType: 'book',
+                                title: fallback.title,
+                                creators: fallback.authors || (fallback.author ? [fallback.author] : ['Unknown Author']),
+                                status: fallback.status,
+                                rating: fallback.rating,
+                                progress: { unit: 'page', current: fallback.currentPage || 0, total: fallback.pages || null },
+                                favorite: fallback.favorite,
+                                visibility: 'private',
+                            },
+                            attempts: [],
+                            historicalAggregates: [],
+                            journalEntries: fallback.privateNotes ? [{
+                                schemaVersion: 2,
+                                id: `journal_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                                body: fallback.privateNotes,
+                                visibility: 'private',
+                                type: 'review',
+                            }] : [],
+                        });
+                    }
+                }
             }
-            if (!parsed.length) {
+
+            if (!candidates.length) {
                 setImportMsg({ type: 'error', text: 'No Bookmory books found in the selected files. Select the .md files from the export.' });
                 return;
             }
-            const summary = await importBookmoryBooks(user.uid, parsed, books, (done, total, t) =>
-                setImportMsg({ type: 'ok', text: `Importing ${done}/${total}${t ? `: ${t}` : ''}` })
-            );
-            const head =
-                `Imported ${summary.added} new, updated ${summary.updated}, ${summary.sessions} reading sessions.` +
-                (summary.failed.length ? `\n${summary.failed.length} failed:\n${summary.failed.join('\n')}` : '') +
-                '\n';
-            await reportSync(head);
+
+            // Pure dry-run calculation without any mutations (DATA-01)
+            const previewReport = previewMigrationBatch(candidates, {
+                items: books,
+                historicalAggregates: [],
+                sessions: [],
+            });
+
+            setImportPreview({
+                previewReport,
+                candidates,
+                filesCount: files.length,
+            });
+            setImportMsg(null);
         } catch (err) {
-            setImportMsg({ type: 'error', text: `Import failed: ${err.message}` });
+            setImportMsg({ type: 'error', text: `Preview analysis failed: ${err.message}` });
         } finally {
             setImporting(false);
         }
     };
 
+    const handleConfirmImport = async () => {
+        if (!importPreview || !user) return;
+        setExecutingImport(true);
+        setImportMsg({ type: 'ok', text: 'Executing safe import...' });
+
+        try {
+            const repo = getDiaryRepository(user.uid);
+            const report = importPreview.previewReport;
+
+            const executionResult = await executeMigrationBatch({
+                uid: user.uid,
+                previewReport: report,
+                repository: repo,
+                onProgress: ({ current, total, message }) => {
+                    setImportMsg({ type: 'ok', text: `[${current}/${total}] ${message}` });
+                },
+            });
+
+            // Mirror staged items to local storage mirror and saveBook for immediate UI reactivity
+            const staged = report.stagedEntities || {};
+            for (const item of (staged.items || [])) {
+                try {
+                    await saveBook(
+                        user.uid,
+                        {
+                            id: item.id,
+                            title: item.title,
+                            author: item.creators?.join(', ') || item.author || '',
+                            authors: item.creators || [item.author],
+                            pages: item.progress?.total ?? item.pages ?? null,
+                            currentPage: item.progress?.current ?? item.currentPage ?? 0,
+                            status: item.status,
+                            rating: item.rating,
+                            favorite: item.favorite,
+                            cover: item.cover || '',
+                            coverId: item.coverId || null,
+                            olKey: item.olKey || '',
+                            genres: item.tags || item.genres || [],
+                            startedOn: item.startedOn || '',
+                            finishedOn: item.finishedOn || '',
+                        },
+                        item.privateNotes || ''
+                    );
+                } catch (err) {
+                    console.warn(`Local mirror update for ${item.title}:`, err);
+                }
+            }
+
+            // Mirror staged journal entries to saveJournalEntry
+            for (const j of (staged.journalEntries || [])) {
+                try {
+                    await saveJournalEntry(user.uid, {
+                        ...j,
+                        entryType: j.type || 'review',
+                        body: j.body,
+                        title: j.title || `Review: ${staged.items?.find(i => i.id === j.linkedMediaId)?.title || 'Book'}`,
+                        linkedMediaId: j.linkedMediaId,
+                        linkedMediaType: 'book',
+                    });
+                } catch (err) {
+                    console.warn('Journal entry mirror update:', err);
+                }
+            }
+
+            setImportPreview(null);
+            const summaryText = `Safe import complete: ${executionResult.importedCount} books imported/updated, ${report.summary.duplicates} duplicates skipped.`;
+            await reportSync(summaryText + '\n');
+        } catch (err) {
+            setImportMsg({ type: 'error', text: `Execution failed: ${err.message}` });
+        } finally {
+            setExecutingImport(false);
+        }
+    };
+
     const filtered = books.filter(b => {
-        if (filter === 'all') return true;
-        return b.status === filter;
+        if (filter !== 'all' && b.status !== filter) return false;
+        if (librarySearch.trim()) {
+            const q = librarySearch.toLowerCase().trim();
+            const titleMatch = (b.title || '').toLowerCase().includes(q);
+            const authorMatch = (b.author || '').toLowerCase().includes(q);
+            if (!titleMatch && !authorMatch) return false;
+        }
+        return true;
     });
 
     const readingCount = books.filter(b => b.status === 'reading').length;
@@ -401,6 +509,9 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
 
     return (
         <BottomTabs title="Books Diary" darkMode={darkMode} setDarkMode={setDarkMode}>
+            {/* Library Switch */}
+            <LibrarySegmentedSwitch />
+
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div>
@@ -462,13 +573,6 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                 </div>
             </div>
 
-            {seedSuccess && (
-                <div className="mb-4 p-3 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900/50 rounded-xl text-green-700 dark:text-green-300 text-xs flex items-center gap-2">
-                    <BsCheck2Circle className="w-4 h-4" />
-                    Successfully synced 51 Bookmory books and reading sessions into Firestore!
-                </div>
-            )}
-
             {importMsg && (
                 <div
                     className={`mb-4 p-3 rounded-xl text-xs whitespace-pre-line border ${
@@ -511,21 +615,34 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                 </div>
             </div>
 
-            {/* Filter Tabs */}
-            <div className="flex gap-2 mb-6 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                {statusTabs.map((tab) => (
-                    <button
-                        key={tab.key}
-                        onClick={() => setFilter(tab.key)}
-                        className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all cursor-pointer whitespace-nowrap ${
-                            filter === tab.key
-                                ? 'bg-primary text-white dark:bg-gray-100 dark:text-gray-900'
-                                : 'bg-white dark:bg-gray-900 text-secondary dark:text-gray-400 border border-border dark:border-gray-800 hover:border-gray-400'
-                        }`}
-                    >
-                        {tab.label}
-                    </button>
-                ))}
+            {/* Filter Tabs & Search */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                    {statusTabs.map((tab) => (
+                        <button
+                            key={tab.key}
+                            onClick={() => setFilter(tab.key)}
+                            className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all cursor-pointer whitespace-nowrap ${
+                                filter === tab.key
+                                    ? 'bg-primary text-white dark:bg-gray-100 dark:text-gray-900'
+                                    : 'bg-white dark:bg-gray-900 text-secondary dark:text-gray-400 border border-border dark:border-gray-800 hover:border-gray-400'
+                            }`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="relative min-w-[200px]">
+                    <BsSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-secondary dark:text-gray-500" />
+                    <input
+                        type="text"
+                        placeholder="Search books..."
+                        value={librarySearch}
+                        onChange={(e) => setLibrarySearch(e.target.value)}
+                        className="w-full pl-9 pr-3 py-1.5 rounded-xl text-xs bg-white dark:bg-gray-900 border border-border dark:border-gray-800 text-primary dark:text-gray-100 focus:outline-none focus:border-primary dark:focus:border-gray-600"
+                    />
+                </div>
             </div>
 
             {/* Books Grid */}
@@ -551,9 +668,9 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                         return (
                             <div
                                 key={safeBookId}
-                                className="bg-white dark:bg-gray-900 border border-border dark:border-gray-800 rounded-2xl overflow-hidden shadow-sm flex flex-col justify-between group"
+                                className="bg-white dark:bg-gray-900 border border-border dark:border-gray-800 rounded-2xl overflow-hidden shadow-sm flex flex-col justify-between group hover:border-primary/40 dark:hover:border-gray-700 transition-colors"
                             >
-                                <div>
+                                <Link to={`/app/books/${safeBookId}`} className="block flex-1 cursor-pointer">
                                     <div className="relative aspect-[2/3] bg-gray-100 dark:bg-gray-800 overflow-hidden">
                                         {coverSrc ? (
                                             <img
@@ -581,7 +698,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                     </div>
 
                                     <div className="p-3">
-                                        <h3 className="font-semibold text-xs text-primary dark:text-gray-100 truncate">
+                                        <h3 className="font-semibold text-xs text-primary dark:text-gray-100 truncate group-hover:text-blue-500 transition-colors">
                                             {book.title}
                                         </h3>
                                         <p className="text-[11px] text-secondary dark:text-gray-400 truncate mt-0.5">
@@ -602,28 +719,37 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                             />
                                         </div>
                                         <p className="text-[10px] text-secondary dark:text-gray-500 mt-1">
-                                            {book.status === 'completed' ? 'Completed' : `${book.progress || 0}%`}
+                                            {book.status === 'completed' ? 'Completed' : (book.pages ? `${book.currentPage || 0} / ${book.pages} p. (${book.progress || 0}%)` : `${book.currentPage || 0} pages read`)}
                                         </p>
                                     </div>
-                                </div>
+                                </Link>
 
                                 <div className="px-3 pb-2 pt-1 border-t border-border/40 dark:border-gray-800/40 flex items-center justify-end gap-1">
                                     <button
-                                        onClick={() => setTimerBook(bookWithId)}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setTimerBook(bookWithId);
+                                        }}
                                         className="p-1.5 text-secondary dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 cursor-pointer"
                                         title="Reading Timer"
                                     >
                                         <BsClock className="w-3.5 h-3.5" />
                                     </button>
                                     <button
-                                        onClick={() => openEditModal(bookWithId)}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            openEditModal(bookWithId);
+                                        }}
                                         className="p-1.5 text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 cursor-pointer"
                                         title="Edit Book"
                                     >
                                         <BsPencilSquare className="w-3.5 h-3.5" />
                                     </button>
                                     <button
-                                        onClick={() => handleDelete(safeBookId)}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDelete(safeBookId);
+                                        }}
                                         className="p-1.5 text-secondary dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 cursor-pointer"
                                         title="Delete Book"
                                     >
@@ -889,6 +1015,151 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Bookmory Safe Import Preview Modal (PR 10) */}
+            {importPreview && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="import-preview-title"
+                >
+                    <div className={`relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden ${
+                        darkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+                    }`}>
+                        {/* Header */}
+                        <div className="flex items-center justify-between p-5 border-b border-inherit">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500">
+                                    <BsFileEarmarkArrowUp className="text-xl" />
+                                </div>
+                                <div>
+                                    <h3 id="import-preview-title" className="text-lg font-bold">Bookmory Import Preview</h3>
+                                    <p className="text-xs text-secondary dark:text-gray-400">
+                                        {importPreview.filesCount} file(s) analyzed · Pure dry-run preview (0 writes made yet)
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setImportPreview(null)}
+                                disabled={executingImport}
+                                className="p-2 rounded-lg text-secondary hover:text-primary dark:text-gray-400 dark:hover:text-gray-200 hover:bg-slate-800/50 transition-colors"
+                                aria-label="Close preview"
+                            >
+                                <BsX className="text-2xl" />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                            {/* Summary Metrics */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <div className={`p-3 rounded-xl border text-center ${
+                                    darkMode ? 'bg-slate-800/50 border-slate-700/60' : 'bg-slate-50 border-slate-200'
+                                }`}>
+                                    <div className="text-2xl font-bold text-emerald-500">{importPreview.previewReport.summary.additions}</div>
+                                    <div className="text-xs text-secondary dark:text-gray-400 mt-0.5">New Books</div>
+                                </div>
+                                <div className={`p-3 rounded-xl border text-center ${
+                                    darkMode ? 'bg-slate-800/50 border-slate-700/60' : 'bg-slate-50 border-slate-200'
+                                }`}>
+                                    <div className="text-2xl font-bold text-blue-500">{importPreview.previewReport.summary.duplicates}</div>
+                                    <div className="text-xs text-secondary dark:text-gray-400 mt-0.5">Duplicates (Skip)</div>
+                                </div>
+                                <div className={`p-3 rounded-xl border text-center ${
+                                    darkMode ? 'bg-slate-800/50 border-slate-700/60' : 'bg-slate-50 border-slate-200'
+                                }`}>
+                                    <div className="text-2xl font-bold text-purple-500">{importPreview.previewReport.summary.historicalAggregatesCount}</div>
+                                    <div className="text-xs text-secondary dark:text-gray-400 mt-0.5">Reading Periods</div>
+                                </div>
+                                <div className={`p-3 rounded-xl border text-center ${
+                                    darkMode ? 'bg-slate-800/50 border-slate-700/60' : 'bg-slate-50 border-slate-200'
+                                }`}>
+                                    <div className="text-2xl font-bold text-amber-500">{importPreview.previewReport.summary.journalEntriesCount}</div>
+                                    <div className="text-xs text-secondary dark:text-gray-400 mt-0.5">Private Reviews</div>
+                                </div>
+                            </div>
+
+                            {/* Warnings / Collisions */}
+                            {importPreview.previewReport.warnings?.length > 0 && (
+                                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs space-y-1">
+                                    <div className="font-semibold flex items-center gap-1.5 text-amber-400">
+                                        <BsExclamationTriangle />
+                                        <span>Warnings & Edge Cases ({importPreview.previewReport.warnings.length})</span>
+                                    </div>
+                                    <ul className="list-disc list-inside space-y-0.5 text-secondary dark:text-gray-300">
+                                        {importPreview.previewReport.warnings.slice(0, 5).map((w, idx) => (
+                                            <li key={idx}>
+                                                <strong className="text-amber-300">{w.title || w.code}:</strong> {w.message || (w.collisions ? `${w.collisions.length} collision(s)` : '')}
+                                            </li>
+                                        ))}
+                                        {importPreview.previewReport.warnings.length > 5 && (
+                                            <li className="italic text-secondary dark:text-gray-400">+ {importPreview.previewReport.warnings.length - 5} more warnings</li>
+                                        )}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {/* Planned Action Diff */}
+                            <div>
+                                <h4 className="text-xs font-semibold uppercase tracking-wider text-secondary dark:text-gray-400 mb-2">Planned Action Diff</h4>
+                                <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                                    {importPreview.previewReport.diff.map((item, idx) => (
+                                        <div
+                                            key={idx}
+                                            className={`flex items-center justify-between p-2.5 rounded-lg text-xs border ${
+                                                item.type === 'duplicate'
+                                                    ? (darkMode ? 'bg-slate-800/30 border-slate-800 text-slate-400' : 'bg-slate-100/60 border-slate-200 text-slate-500')
+                                                    : item.type === 'update'
+                                                    ? (darkMode ? 'bg-blue-500/10 border-blue-500/20 text-blue-200' : 'bg-blue-50 border-blue-200 text-blue-800')
+                                                    : (darkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-200' : 'bg-emerald-50 border-emerald-200 text-emerald-800')
+                                            }`}
+                                        >
+                                            <span className="font-medium truncate max-w-[280px] sm:max-w-md">{item.title}</span>
+                                            <span className={`px-2 py-0.5 rounded-full font-semibold uppercase text-[10px] ${
+                                                item.type === 'duplicate'
+                                                    ? 'bg-slate-700/50 text-slate-300'
+                                                    : item.type === 'update'
+                                                    ? 'bg-blue-500/20 text-blue-400'
+                                                    : 'bg-emerald-500/20 text-emerald-400'
+                                            }`}>
+                                                {item.type === 'duplicate' ? 'Skip (duplicate)' : item.type === 'update' ? 'Update' : 'New Add'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer Actions */}
+                        <div className="flex items-center justify-end gap-3 p-4 border-t border-inherit bg-slate-900/40">
+                            <button
+                                type="button"
+                                onClick={() => setImportPreview(null)}
+                                disabled={executingImport}
+                                className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmImport}
+                                disabled={executingImport || (importPreview.previewReport.summary.additions === 0 && importPreview.previewReport.summary.updates === 0)}
+                                className="flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {executingImport ? (
+                                    <>
+                                        <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                                        <span>Importing...</span>
+                                    </>
+                                ) : (
+                                    <span>Confirm Import</span>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
