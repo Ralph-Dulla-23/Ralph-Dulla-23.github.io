@@ -315,9 +315,11 @@ export async function saveGame(uid, gameData, privateReview = '') {
 
     const baseFields = {
         id: gameId,
+        mediaType: 'game',
         rawgId: gameData?.rawgId || null,
         title: gameData?.title || 'Untitled Game',
         cover: gameData?.cover || '',
+        coverUrl: gameData?.cover || gameData?.coverUrl || '',
         released: gameData?.released || '',
         genres: Array.isArray(gameData?.genres) ? gameData.genres : [],
         platforms: Array.isArray(gameData?.platforms) ? gameData.platforms : [],
@@ -325,6 +327,7 @@ export async function saveGame(uid, gameData, privateReview = '') {
         finishedOn: gameData?.finishedOn || '',
         hoursPlayed: Number(gameData?.hoursPlayed) || 0,
         rating: Number(gameData?.rating) || 0, // 0 - 10 scale
+        ratingScale: 10,
         status: gameData?.status || (gameData?.finishedOn ? 'finished' : 'playing'),
     };
 
@@ -346,7 +349,14 @@ export async function saveGame(uid, gameData, privateReview = '') {
     unmarkDeletedId(gameId);
     notifyGameSubscribers();
 
-    // 2. Attempt Firestore sync in background-safe try/catch
+    // 2. Automatically project sanitized public game metadata to public shelf
+    try {
+        await publishLibraryItem(safeUid, { ...baseFields, mediaType: 'game' });
+    } catch (err) {
+        console.warn('Auto-publish to public shelf deferred:', err.message);
+    }
+
+    // 3. Attempt Firestore sync in background-safe try/catch
     if (db) {
         try {
             const gameRef = doc(db, 'users', safeUid, 'games', gameId);
@@ -393,6 +403,13 @@ export async function deleteGame(uid, gameId) {
 
     markDeletedId(safeGameId);
     notifyGameSubscribers();
+
+    // Remove from public shelf mirror and projection
+    try {
+        await unpublishLibraryItem(safeUid, safeGameId);
+    } catch {
+        // Safe to ignore
+    }
 
     if (db) {
         try {
@@ -919,9 +936,10 @@ export async function syncLocalToCloud(uid) {
         const gameNotes = readJson(LS_GAME_NOTES_KEY, {});
         for (const [key, game] of Object.entries(localGames)) {
             const id = sanitizeId(game?.id || key, 'game');
+            const cleanGame = { ...stripLocal(game), id, mediaType: 'game' };
             await setDoc(
                 doc(db, 'users', safeUid, 'games', id),
-                { ...stripLocal(game), id, updatedAt: serverTimestamp() },
+                { ...cleanGame, updatedAt: serverTimestamp() },
                 { merge: true }
             );
             if (gameNotes[id]) {
@@ -931,6 +949,7 @@ export async function syncLocalToCloud(uid) {
                     { merge: true }
                 );
             }
+            await publishLibraryItem(safeUid, cleanGame).catch(() => {});
             result.games++;
         }
 
@@ -1050,8 +1069,10 @@ export async function pullGamesFromCloud(uid) {
                 continue;
             }
             const data = docSnap.data();
-            localGames[id] = { ...data, id };
+            const gameRecord = { ...data, id, mediaType: 'game' };
+            localGames[id] = gameRecord;
             unmarkDeletedId(id);
+            publishLibraryItem(safeUid, gameRecord).catch(() => {});
             result.games++;
 
             try {

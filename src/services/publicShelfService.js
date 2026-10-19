@@ -52,6 +52,31 @@ export function observePublicShelf(ownerUid, onUpdate) {
             if (item) map.set(String(id), { ...item, id });
         });
 
+        // 3. Local mirror of logged games (sanitized for public projection)
+        const localGames = readJson('diary_games_v1', {});
+        Object.entries(localGames).forEach(([id, item]) => {
+            if (item && !map.has(String(id))) {
+                map.set(String(id), {
+                    schemaVersion: 2,
+                    id: String(id),
+                    mediaType: 'game',
+                    title: item.title || 'Untitled Game',
+                    cover: item.cover || item.coverUrl || '',
+                    coverUrl: item.cover || item.coverUrl || '',
+                    released: item.released || '',
+                    genres: Array.isArray(item.genres) ? item.genres : [],
+                    platforms: Array.isArray(item.platforms) ? item.platforms : (item.platform ? [item.platform] : []),
+                    platform: item.platform || (Array.isArray(item.platforms) ? item.platforms[0] || '' : ''),
+                    finishedOn: item.finishedOn || '',
+                    hoursPlayed: Number(item.hoursPlayed) || 0,
+                    rating: Number(item.rating) || 0,
+                    ratingScale: 10,
+                    status: item.status || (item.finishedOn ? 'finished' : 'playing'),
+                    publishedAt: item.updatedAtISO || new Date().toISOString(),
+                });
+            }
+        });
+
         let list = Array.from(map.values());
 
         // Fallback: If no public items exist yet, use sanitized static fallback books
@@ -86,8 +111,21 @@ export function observePublicShelf(ownerUid, onUpdate) {
 
     emit();
 
+    const handleStorage = (e) => {
+        if (!e || e.key === LS_PUBLIC_SHELF_KEY || e.key === 'diary_games_v1' || e.key === 'diary_books_v1') {
+            emit();
+        }
+    };
+    if (typeof window !== 'undefined') {
+        window.addEventListener('storage', handleStorage);
+    }
+
     if (!db || !ownerUid) {
-        return () => {};
+        return () => {
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('storage', handleStorage);
+            }
+        };
     }
 
     try {
@@ -106,10 +144,19 @@ export function observePublicShelf(ownerUid, onUpdate) {
                 emit();
             }
         );
-        return unsub;
+        return () => {
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('storage', handleStorage);
+            }
+            unsub();
+        };
     } catch (err) {
         console.warn('observePublicShelf initialization error:', err.message);
-        return () => {};
+        return () => {
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('storage', handleStorage);
+            }
+        };
     }
 }
 

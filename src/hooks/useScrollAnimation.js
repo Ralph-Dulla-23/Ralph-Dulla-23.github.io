@@ -1,20 +1,28 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 
 /**
  * Hook that adds scroll-triggered entrance animations using IntersectionObserver.
  * Adds 'is-visible' class when element enters the viewport.
+ * Works reliably with both static mounts and conditional/tab re-renders using a callback ref.
  * 
  * @param {Object} options
  * @param {number} options.threshold - Visibility threshold (0-1), default 0.02
  * @param {string} options.rootMargin - Margin around root, default '0px 0px 50px 0px'
- * @returns {React.RefObject} ref to attach to the animated element
+ * @returns {Function & { current: HTMLElement | null }} ref to attach to the animated element
  */
 export function useScrollAnimation({ threshold = 0.02, rootMargin = '0px 0px 50px 0px' } = {}) {
-    const ref = useRef(null);
+    const observerRef = useRef(null);
 
-    useEffect(() => {
-        const element = ref.current;
+    const refCallback = useCallback((element) => {
+        if (observerRef.current) {
+            observerRef.current.disconnect();
+            observerRef.current = null;
+        }
+
         if (!element) return;
+
+        // If already marked visible, keep it visible
+        if (element.classList.contains('is-visible')) return;
 
         // Immediately reveal if reduced motion is requested or if already in/above the viewport
         const prefersReducedMotion = typeof window !== 'undefined' &&
@@ -38,9 +46,8 @@ export function useScrollAnimation({ threshold = 0.02, rootMargin = '0px 0px 50p
         );
 
         observer.observe(element);
-
-        return () => observer.disconnect();
+        observerRef.current = observer;
     }, [threshold, rootMargin]);
 
-    return ref;
+    return refCallback;
 }

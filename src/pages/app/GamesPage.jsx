@@ -8,6 +8,7 @@ import {
     saveGame,
     deleteGame,
     watchPublicGames,
+    publishLibraryItem,
     getGamePrivateNotes,
     calculateGameStats,
     pullGamesFromCloud,
@@ -75,6 +76,13 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
         const unsubscribe = watchPublicGames(user.uid, (data) => {
             setGames(data);
             setLoading(false);
+            if (Array.isArray(data)) {
+                data.forEach((game) => {
+                    if (game && game.id) {
+                        publishLibraryItem(user.uid, { ...game, mediaType: 'game' }).catch(() => {});
+                    }
+                });
+            }
         });
         return () => unsubscribe();
     }, [user]);
@@ -260,6 +268,7 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
                 user.uid,
                 {
                     id: editingGame?.id,
+                    mediaType: 'game',
                     title: title.trim(),
                     platform,
                     status,

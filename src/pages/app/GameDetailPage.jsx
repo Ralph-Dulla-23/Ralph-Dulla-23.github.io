@@ -108,7 +108,7 @@ export default function GameDetailPage({ darkMode, setDarkMode }) {
                 await unpublishLibraryItem(user.uid, game.id);
                 setIsPublished(false);
             } else {
-                await publishLibraryItem(user.uid, game);
+                await publishLibraryItem(user.uid, { ...game, mediaType: 'game' });
                 setIsPublished(true);
             }
         } catch (err) {
