@@ -10,12 +10,19 @@ import Certificates from './components/Certificates';
 import Library from './components/Library';
 import Contact from './components/Contact';
 import { AuthProvider } from './context/AuthContext';
+import { ActivityTimerProvider } from './context/TimerContext';
 import RequireAuth from './components/auth/RequireAuth';
 
 const LibraryPage = lazy(() => import('./pages/LibraryPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const GamesPage = lazy(() => import('./pages/app/GamesPage'));
 const BooksPage = lazy(() => import('./pages/app/BooksPage'));
+const DiaryHomePage = lazy(() => import('./pages/app/HomePage'));
+const CalendarPage = lazy(() => import('./pages/app/CalendarPage'));
+const JournalPage = lazy(() => import('./pages/app/JournalPage'));
+const InsightsPage = lazy(() => import('./pages/app/InsightsPage'));
+const BookDetailPage = lazy(() => import('./pages/app/BookDetailPage'));
+const GameDetailPage = lazy(() => import('./pages/app/GameDetailPage'));
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const lenisRef = { current: null };
@@ -39,7 +46,7 @@ function PageLoader() {
   );
 }
 
-function HomePage({ darkMode, setDarkMode }) {
+function PortfolioPage({ darkMode, setDarkMode }) {
   useEffect(() => {
     const lenis = new Lenis({
       duration: 1.2,
@@ -78,11 +85,11 @@ function HomePage({ darkMode, setDarkMode }) {
 }
 
 function RootRoute({ darkMode, setDarkMode }) {
-  // If running inside Capacitor native Android wrapper, redirect root to /app/games
+  // If running inside Capacitor native Android wrapper, redirect root to /app/home
   if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) {
-    return <Navigate to="/app/games" replace />;
+    return <Navigate to="/app/home" replace />;
   }
-  return <HomePage darkMode={darkMode} setDarkMode={setDarkMode} />;
+  return <PortfolioPage darkMode={darkMode} setDarkMode={setDarkMode} />;
 }
 
 function App() {
@@ -102,45 +109,102 @@ function App() {
 
   return (
     <AuthProvider>
-      <HashRouter>
-        <ScrollToTop />
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            {/* Public Portfolio */}
-            <Route path="/" element={<RootRoute darkMode={darkMode} setDarkMode={setDarkMode} />} />
-            <Route path="/portfolio" element={<HomePage darkMode={darkMode} setDarkMode={setDarkMode} />} />
+      <ActivityTimerProvider>
+        <HashRouter>
+          <ScrollToTop />
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              {/* Public Portfolio */}
+              <Route path="/" element={<RootRoute darkMode={darkMode} setDarkMode={setDarkMode} />} />
+              <Route path="/portfolio" element={<PortfolioPage darkMode={darkMode} setDarkMode={setDarkMode} />} />
 
-            {/* Public Stats & Shelf */}
-            <Route path="/library" element={<LibraryPage darkMode={darkMode} setDarkMode={setDarkMode} initialTab="books" />} />
-            <Route path="/stats" element={<LibraryPage darkMode={darkMode} setDarkMode={setDarkMode} initialTab="games" />} />
+              {/* Public Stats & Shelf */}
+              <Route path="/library" element={<LibraryPage darkMode={darkMode} setDarkMode={setDarkMode} initialTab="books" />} />
+              <Route path="/stats" element={<LibraryPage darkMode={darkMode} setDarkMode={setDarkMode} initialTab="games" />} />
 
-            {/* Owner Sign In */}
-            <Route path="/login" element={<LoginPage darkMode={darkMode} setDarkMode={setDarkMode} />} />
+              {/* Owner Sign In */}
+              <Route path="/login" element={<LoginPage darkMode={darkMode} setDarkMode={setDarkMode} />} />
 
-            {/* Protected Owner Diary App */}
-            <Route path="/app" element={<Navigate to="/app/games" replace />} />
-            <Route
-              path="/app/games"
-              element={
-                <RequireAuth>
-                  <GamesPage darkMode={darkMode} setDarkMode={setDarkMode} />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/app/books"
-              element={
-                <RequireAuth>
-                  <BooksPage darkMode={darkMode} setDarkMode={setDarkMode} />
-                </RequireAuth>
-              }
-            />
+              {/* Protected Owner Diary App */}
+              <Route path="/app" element={<Navigate to="/app/home" replace />} />
+              <Route
+                path="/app/home"
+                element={
+                  <RequireAuth>
+                    <DiaryHomePage darkMode={darkMode} setDarkMode={setDarkMode} />
+                  </RequireAuth>
+                }
+              />
+              <Route path="/app/library" element={<Navigate to="/app/library/books" replace />} />
+              <Route
+                path="/app/library/books"
+                element={
+                  <RequireAuth>
+                    <BooksPage darkMode={darkMode} setDarkMode={setDarkMode} />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/app/library/games"
+                element={
+                  <RequireAuth>
+                    <GamesPage darkMode={darkMode} setDarkMode={setDarkMode} />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/app/calendar"
+                element={
+                  <RequireAuth>
+                    <CalendarPage darkMode={darkMode} setDarkMode={setDarkMode} />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/app/journal"
+                element={
+                  <RequireAuth>
+                    <JournalPage darkMode={darkMode} setDarkMode={setDarkMode} />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/app/insights"
+                element={
+                  <RequireAuth>
+                    <InsightsPage darkMode={darkMode} setDarkMode={setDarkMode} />
+                  </RequireAuth>
+                }
+              />
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </HashRouter>
+              {/* Media Detail Routes */}
+              <Route
+                path="/app/books/:id"
+                element={
+                  <RequireAuth>
+                    <BookDetailPage darkMode={darkMode} setDarkMode={setDarkMode} />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/app/games/:id"
+                element={
+                  <RequireAuth>
+                    <GameDetailPage darkMode={darkMode} setDarkMode={setDarkMode} />
+                  </RequireAuth>
+                }
+              />
+
+              {/* Legacy Compatibility Redirects */}
+              <Route path="/app/books" element={<Navigate to="/app/library/books" replace />} />
+              <Route path="/app/games" element={<Navigate to="/app/library/games" replace />} />
+
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </HashRouter>
+      </ActivityTimerProvider>
     </AuthProvider>
   );
 }
