@@ -100,6 +100,12 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
     const gridRef = useScrollAnimation();
     const readingRef = useScrollAnimation();
     const footerRef = useScrollAnimation();
+    const gameStatsRef = useScrollAnimation();
+
+    // Notify window and Lenis when active tab toggles to recalculate heights and trigger intersection observations
+    useEffect(() => {
+        window.dispatchEvent(new Event('resize'));
+    }, [activeTab]);
 
     // Subscribe to public shelf for books and games
     useEffect(() => {
@@ -365,9 +371,8 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
             </header>
 
             <main className="max-w-4xl mx-auto px-6 pb-20">
-                {activeTab === 'books' ? (
-                    <>
-                        {/* Books Stats */}
+                <div className={activeTab === 'books' ? 'block' : 'hidden'} key="books-tab-pane">
+                    {/* Books Stats */}
                         <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10" ref={statsRef} data-animate-stagger>
                             <StatCard icon={Icons.books('w-6 h-6')} label="Total Books" value={books.length} />
                             <StatCard icon={Icons.check('w-6 h-6 text-green-500')} label="Completed" value={completedBooks.length} />
@@ -554,12 +559,12 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                                 </div>
                             </section>
                         )}
-                    </>
-                ) : (
-                    /* Games Tab */
-                    <>
+                    </div>
+
+                    {/* Games Tab */}
+                    <div className={activeTab === 'games' ? 'block' : 'hidden'} key="games-tab-pane">
                         {/* Game Stats */}
-                        <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10" ref={statsRef} data-animate-stagger>
+                        <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10" ref={gameStatsRef} data-animate-stagger>
                             <StatCard icon={<BsController className="w-6 h-6 text-purple-500" />} label="Finished Games" value={finishedGames.length} />
                             <StatCard icon={<BsClock className="w-6 h-6 text-blue-500" />} label="Total Hours" value={`${totalGameHours} hrs`} />
                             <StatCard icon={<BsStarFill className="w-6 h-6 text-amber-400" />} label="Avg Rating" value={`${avgGameRating} / 10`} />
@@ -842,8 +847,7 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                                 ))}
                             </section>
                         )}
-                    </>
-                )}
+                    </div>
 
                 <footer className="text-center mt-16 pt-8 border-t border-gray-100 dark:border-gray-800" ref={footerRef} data-animate>
                     <p className="text-xs text-secondary dark:text-gray-500 flex items-center justify-center gap-1">

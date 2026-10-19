@@ -22,7 +22,7 @@ export const RAWG_API_KEY = env.VITE_RAWG_API_KEY || '';
  * The Firebase Auth UID of the portfolio and diary owner.
  * Set in .env as VITE_OWNER_UID.
  */
-export const OWNER_UID = (env.VITE_OWNER_UID || '').trim();
+export const OWNER_UID = (env.VITE_OWNER_UID || 'B0p0XBPscBNF4Dchuk1IsOACrvk2').trim();
 
 /**
  * Returns true if Firebase config is present with required keys.
