@@ -78,125 +78,122 @@ export function detectCollisions(candidate, existingItem) {
  */
 export function previewMigrationBatch(candidates = [], existingState = {}) {
     const existingItems = existingState.items || [];
+    const existingAttempts = existingState.attempts || [];
     const existingAggregates = existingState.historicalAggregates || [];
+    const existingJournals = existingState.journalEntries || [];
     const existingSessions = existingState.sessions || [];
-
+    const existingCanonicalSessionIds = new Set(existingSessions.map((v) => v.id));
     const { byId, byTitle, byIsbn } = buildSourceIdMap(existingItems);
-
-    const summary = {
-        totalCandidates: candidates.length,
-        additions: 0,
-        updates: 0,
-        duplicates: 0,
-        historicalAggregatesCount: 0,
-        journalEntriesCount: 0,
-        warningsCount: 0,
-    };
-
-    const diff = [];
-    const warnings = [];
-    const stagedEntities = {
-        items: [],
-        attempts: [],
-        historicalAggregates: [],
-        journalEntries: [],
-    };
-
+    const summary = { totalCandidates: candidates.length, additions: 0, updates: 0,
+        duplicates: 0, historicalAggregatesCount: 0, journalEntriesCount: 0, sessionsCount: 0, warningsCount: 0 };
+    const stagedEntities = { items: [], attempts: [], sessions: [], historicalAggregates: [], journalEntries: [] };
+    const warnings = [], diff = [];
+    const existingAttemptIds = new Set(existingAttempts.map((v) => v.id));
+    const existingAggIds = new Set(existingAggregates.map((v) => v.id));
+    const existingJournalIds = new Set(existingJournals.map((v) => v.id));
+    const seenSourceIds = new Set();
     let legacySessionsSuperseded = 0;
 
-    for (const cand of candidates) {
-        const item = cand.item;
-
-        // Warn on unknown total pages without fabricating values
-        if (item.progress?.total === null) {
-            warnings.push({
-                code: 'UNKNOWN_TOTAL_PAGES',
-                title: item.title,
-                message: `Book "${item.title}" has unknown total pages; total set to null per DATA-03.`,
-            });
+    for (const candidate of candidates) {
+        if (!candidate?.item?.title) continue;
+        const sourceItem = candidate.item;
+        const sourceKey = sourceItem.provenance?.sourceKey || sourceItem.id;
+        if (seenSourceIds.has(sourceKey)) {
+            warnings.push({ code: 'DUPLICATE_SOURCE', title: sourceItem.title, message: 'Duplicate export record skipped.' });
+            summary.duplicates++;
+            continue;
         }
-
-        // Match against existing items
-        const existing =
-            byId.get(String(item.id)) ||
-            byTitle.get(normTitle(item.title)) ||
-            (item.isbn ? byIsbn.get(String(item.isbn).toLowerCase()) : null);
-
-        if (existing) {
-            const collisions = detectCollisions(cand, existing);
-            if (collisions.length > 0) {
-                warnings.push({
-                    code: 'COLLISION',
-                    title: item.title,
-                    collisions,
-                });
-            }
-
-            // Check if existing state already has this item and aggregates
-            const alreadyHasAggregates = existingAggregates.some((a) => a.mediaId === existing.id);
-            const isExactMatch =
-                existing.status === item.status &&
-                existing.rating === item.rating &&
-                (alreadyHasAggregates || cand.historicalAggregates.length === 0);
-
-            if (isExactMatch) {
-                summary.duplicates++;
-                diff.push({
-                    type: 'duplicate',
-                    title: item.title,
-                    id: existing.id,
-                });
-                continue;
-            }
-
-            // Otherwise, staged as an update
-            summary.updates++;
-            diff.push({
-                type: 'update',
-                title: item.title,
-                id: existing.id,
-                changes: collisions,
-            });
-            stagedEntities.items.push({
-                ...item,
-                id: existing.id,
-            });
-        } else {
-            // New addition
-            summary.additions++;
-            diff.push({
-                type: 'add',
-                title: item.title,
-                id: item.id,
-            });
-            stagedEntities.items.push(item);
-            stagedEntities.attempts.push(...cand.attempts);
-            stagedEntities.historicalAggregates.push(...cand.historicalAggregates);
-            stagedEntities.journalEntries.push(...cand.journalEntries);
-
-            summary.historicalAggregatesCount += cand.historicalAggregates.length;
-            summary.journalEntriesCount += cand.journalEntries.length;
+        seenSourceIds.add(sourceKey);
+        const titleMatch = byTitle.get(normTitle(sourceItem.title));
+        const isbnMatch = sourceItem.isbn ? byIsbn.get(String(sourceItem.isbn).toLowerCase()) : null;
+        // Conflicting ISBNs on a title match are different editions: require manual handling.
+        if (titleMatch && sourceItem.isbn && titleMatch.isbn && String(titleMatch.isbn) !== String(sourceItem.isbn) && !isbnMatch) {
+            warnings.push({ code: 'EDITION_CONFLICT', title: sourceItem.title, message: 'Existing title has a different ISBN; skipped to prevent edition collision.' });
+            diff.push({ type: 'skip', id: sourceItem.id, title: sourceItem.title });
+            continue;
         }
-
-        // Check for legacy synthetic sessions (bookmory_${id}_${j}) to supersede
-        const targetId = existing?.id || item.id;
-        const matchingLegacy = existingSessions.filter(
-            (s) => s.id && s.id.startsWith(`bookmory_${targetId}`)
-        );
-        if (matchingLegacy.length > 0) {
-            legacySessionsSuperseded += matchingLegacy.length;
+        const existing = isbnMatch || byId.get(String(sourceItem.id)) || titleMatch;
+        const finalId = existing?.id || sourceItem.id;
+        if (sourceItem.progress?.total === null) {
+            warnings.push({ code: 'UNKNOWN_TOTAL_PAGES', title: sourceItem.title,
+                message: 'Export contains no page total; existing known value will be preserved.' });
         }
+        const collisions = existing ? detectCollisions(candidate, existing) : [];
+        if (collisions.length) warnings.push({ code: 'COLLISION', title: sourceItem.title, collisions });
+        // Preserve owner edits, current reading position, cover and visibility.
+        // New Bookmory metadata is accepted only for empty fields or the approved source status/rating.
+        const existingPages = existing?.progress?.total ?? existing?.pages ?? null;
+        const incomingPages = sourceItem.progress?.total ?? null;
+        const resolvedPages = existingPages && incomingPages && existingPages !== incomingPages
+            ? existingPages // Explicit conflict: retain existing edition length until manually reviewed.
+            : (incomingPages ?? existingPages);
+        const merged = existing ? {
+            ...existing,
+            ...sourceItem,
+            id: finalId,
+            cover: existing.cover || sourceItem.cover || '',
+            coverId: existing.coverId ?? sourceItem.coverId ?? null,
+            olKey: existing.olKey || sourceItem.olKey || '',
+            visibility: existing.visibility || 'private',
+            favorite: existing.favorite ?? sourceItem.favorite,
+            wishlist: existing.wishlist ?? sourceItem.wishlist,
+            progress: {
+                ...sourceItem.progress,
+                total: resolvedPages,
+                current: sourceItem.status === 'completed'
+                    ? (resolvedPages ?? existing.currentPage ?? 0)
+                    : (existing.progress?.current ?? existing.currentPage ?? 0),
+            },
+            purchases: Array.from(new Map([...(existing.purchases || []), ...(sourceItem.purchases || [])]
+                .map((v) => [v.id || `${v.date}_${v.amount}`, v])).values()),
+            startedOn: sourceItem.startedOn || existing.startedOn || null,
+            finishedOn: sourceItem.finishedOn || existing.finishedOn || null,
+        } : sourceItem;
+        // Never mutate an existing book's private notes or unpublished state.
+        const changed = !existing || [
+            'status','rating','favorite','isbn','publisher','publicationDate','language','bookFormat',
+            'bookmoryLogCount','startedOn','finishedOn','wishlist'
+        ].some((key) => JSON.stringify(merged[key] ?? null) !== JSON.stringify(existing[key] ?? null)) ||
+            JSON.stringify(merged.tags || []) !== JSON.stringify(existing.tags || existing.genres || []) ||
+            JSON.stringify(merged.purchases || []) !== JSON.stringify(existing.purchases || []) ||
+            JSON.stringify(merged.progress) !== JSON.stringify(existing.progress || {
+                unit: 'page', current: existing.currentPage || 0, total: existing.pages || null
+            });
+        const mapChild = (child) => ({ ...child,
+            id: child.id?.replace(sourceItem.id, finalId),
+            ...(child.libraryItemId ? { libraryItemId: finalId } : {}),
+            ...(child.mediaId ? { mediaId: finalId } : {}),
+            ...(child.linkedMediaId ? { linkedMediaId: finalId } : {}),
+        });
+        const childAttempts = (candidate.attempts || []).map(mapChild).filter((v) => !existingAttemptIds.has(v.id));
+        const childAggs = (candidate.historicalAggregates || []).map(mapChild).filter((v) => !existingAggIds.has(v.id));
+        const childJournals = (candidate.journalEntries || []).map(mapChild).filter((v) => !existingJournalIds.has(v.id));
+        const childSessions = (candidate.sessions || []).map(mapChild).filter((v) => !existingCanonicalSessionIds.has(v.id));
+        // Mark staged IDs immediately to avoid duplicate siblings within the same import.
+        childAttempts.forEach((v) => existingAttemptIds.add(v.id));
+        childAggs.forEach((v) => existingAggIds.add(v.id));
+        childJournals.forEach((v) => existingJournalIds.add(v.id));
+        childSessions.forEach((v) => existingCanonicalSessionIds.add(v.id));
+        if (changed) stagedEntities.items.push(merged);
+        stagedEntities.attempts.push(...childAttempts);
+        stagedEntities.historicalAggregates.push(...childAggs);
+        stagedEntities.journalEntries.push(...childJournals);
+        stagedEntities.sessions.push(...childSessions);
+        summary.sessionsCount += childSessions.length;
+        summary.historicalAggregatesCount += childAggs.length;
+        summary.journalEntriesCount += childJournals.length;
+        const isDuplicate = !changed && !childAttempts.length && !childAggs.length && !childJournals.length && !childSessions.length;
+        if (isDuplicate) summary.duplicates++;
+        else if (existing) summary.updates++;
+        else summary.additions++;
+        diff.push({ type: isDuplicate ? 'duplicate' : (existing ? 'update' : 'add'),
+            id: finalId, title: sourceItem.title, changes: collisions });
+        legacySessionsSuperseded += existingSessions.filter((session) =>
+            session.id && (session.id.startsWith(`bookmory_${finalId}_`) || session.id.startsWith(`bookmory_${sourceItem.id}_`))
+        ).length;
     }
-
     summary.warningsCount = warnings.length;
-
-    return {
-        summary,
-        diff,
-        warnings,
-        stagedEntities,
-        legacySessionsSuperseded,
-    };
+    return { summary, diff, warnings, stagedEntities, legacySessionsSuperseded };
 }
 
 /**
@@ -213,6 +210,7 @@ export function generateRollbackManifest(previewReport, existingState = {}) {
             attempts: staged.attempts ? staged.attempts.map((a) => a.id) : [],
             historicalAggregates: staged.historicalAggregates ? staged.historicalAggregates.map((h) => h.id) : [],
             journalEntries: staged.journalEntries ? staged.journalEntries.map((j) => j.id) : [],
+            sessions: staged.sessions ? staged.sessions.map((j) => j.id) : [],
         },
         rollbackActions: (staged.items || []).map((i) => {
             const existed = (existingState.items || []).find((e) => e.id === i.id);
@@ -248,8 +246,9 @@ export async function executeMigrationBatch({ previewReport, repository, onProgr
     const attempts = staged.attempts || [];
     const historicalAggregates = staged.historicalAggregates || [];
     const journalEntries = staged.journalEntries || [];
+    const sessions = staged.sessions || [];
 
-    const totalOperations = items.length + attempts.length + historicalAggregates.length + journalEntries.length;
+    const totalOperations = items.length + attempts.length + historicalAggregates.length + journalEntries.length + sessions.length;
     let completed = 0;
 
     const notify = (message) => {
@@ -281,7 +280,15 @@ export async function executeMigrationBatch({ previewReport, repository, onProgr
         completed++;
     }
 
-    // 3. Write Historical Aggregates
+    // 3. Write actual native Bookmory timer sessions when timestamps exist.
+    for (const session of sessions) {
+        notify('Saving verified native reading timer');
+        if (typeof repository.createSession !== 'function') throw new Error('Repository cannot save canonical sessions.');
+        await repository.createSession(session);
+        completed++;
+    }
+
+    // 4. Write Historical Aggregates
     for (const agg of historicalAggregates) {
         notify('Saving reading history');
         if (typeof repository.createHistoricalAggregate === 'function') {
@@ -290,7 +297,7 @@ export async function executeMigrationBatch({ previewReport, repository, onProgr
         completed++;
     }
 
-    // 4. Write Private Journal Entries
+    // 5. Write Private Journal Entries
     for (const entry of journalEntries) {
         notify('Saving private note/review');
         if (typeof repository.createJournalEntry === 'function') {
@@ -305,6 +312,7 @@ export async function executeMigrationBatch({ previewReport, repository, onProgr
         success: true,
         importedCount: items.length,
         aggregatesCount: historicalAggregates.length,
+        sessionsCount: sessions.length,
         journalEntriesCount: journalEntries.length,
         rollbackManifest,
     };

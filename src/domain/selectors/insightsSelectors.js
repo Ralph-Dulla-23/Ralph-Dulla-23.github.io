@@ -15,7 +15,7 @@ import { normalizeBookStatus, normalizeGameStatus } from '../status.js';
  * @param {string} [timeZone=DEFAULT_TIMEZONE]
  * @returns {Array<Object>}
  */
-export function filterSessionsByTimeRange(sessions, timeRange = 'all', timeZone = DEFAULT_TIMEZONE) {
+export function filterSessionsByTimeRange(sessions, timeRange = 'all', timeZone = DEFAULT_TIMEZONE, custom = {}) {
     if (!Array.isArray(sessions)) return [];
 
     const todayKey = getCurrentLocalDateKey(timeZone);
@@ -23,9 +23,13 @@ export function filterSessionsByTimeRange(sessions, timeRange = 'all', timeZone 
     const currentMonthPrefix = todayKey.slice(0, 7); // 'YYYY-MM'
 
     return sessions.filter((s) => {
-        if (!s || s.isDailySession === false) return false;
-        const dateKey = toLocalDateKey(s.startedAt || s.date, timeZone);
-        if (!dateKey) return true;
+        if (!s || s.isDailySession === false || /^bookmory_/i.test(s.id || "") || s.source === "bookmory") return false;
+        const dateKey = toLocalDateKey(s.date || s.startedAt, timeZone);
+        if (!dateKey) return timeRange === 'all';
+        if (timeRange === 'custom') {
+            return Boolean(/^\d{4}-\d{2}-\d{2}$/.test(custom.from || '') && /^\d{4}-\d{2}-\d{2}$/.test(custom.to || '')
+                && custom.from <= dateKey && dateKey <= custom.to);
+        }
 
         if (timeRange === 'month') {
             return dateKey.startsWith(currentMonthPrefix);
@@ -46,27 +50,25 @@ export function filterSessionsByTimeRange(sessions, timeRange = 'all', timeZone 
  * @param {string} [timeZone=DEFAULT_TIMEZONE]
  * @returns {Object}
  */
-export function calculateBookInsights(books = [], sessions = [], timeRange = 'all', timeZone = DEFAULT_TIMEZONE) {
+export function calculateBookInsights(books = [], sessions = [], timeRange = 'all', timeZone = DEFAULT_TIMEZONE, custom = {}) {
     const safeBooks = Array.isArray(books) ? books : [];
     const bookMap = new Map();
     safeBooks.forEach((b) => {
         if (b && b.id) bookMap.set(String(b.id), b);
     });
 
-    const filteredSessions = filterSessionsByTimeRange(sessions, timeRange, timeZone);
+    const filteredSessions = filterSessionsByTimeRange(sessions, timeRange, timeZone, custom);
 
     let totalReadingMinutes = 0;
     let totalPagesRead = 0;
 
     filteredSessions.forEach((s) => {
-        const mediaId = s.mediaId || s.bookId;
+        const mediaId = s.libraryItemId || s.itemId || s.mediaId || s.bookId;
         const isBook = s.mediaType === 'book' || bookMap.has(String(mediaId)) || s.fromPage !== undefined;
         if (isBook) {
-            if (s.minutes) {
-                totalReadingMinutes += Number(s.minutes) || 0;
-            } else if (s.durationSeconds) {
-                totalReadingMinutes += Math.round((Number(s.durationSeconds) || 0) / 60);
-            }
+            totalReadingMinutes += Number.isFinite(Number(s.activeSeconds)) && s.activeSeconds !== undefined
+                ? Math.max(0, Number(s.activeSeconds) / 60)
+                : (Number(s.minutes) || (Number(s.durationSeconds) || 0) / 60);
             if (s.pagesRead) {
                 totalPagesRead += Number(s.pagesRead) || 0;
             } else if (s.toPage !== undefined && s.fromPage !== undefined) {
@@ -119,26 +121,24 @@ export function calculateBookInsights(books = [], sessions = [], timeRange = 'al
  * @param {string} [timeZone=DEFAULT_TIMEZONE]
  * @returns {Object}
  */
-export function calculateGameInsights(games = [], sessions = [], timeRange = 'all', timeZone = DEFAULT_TIMEZONE) {
+export function calculateGameInsights(games = [], sessions = [], timeRange = 'all', timeZone = DEFAULT_TIMEZONE, custom = {}) {
     const safeGames = Array.isArray(games) ? games : [];
     const gameMap = new Map();
     safeGames.forEach((g) => {
         if (g && g.id) gameMap.set(String(g.id), g);
     });
 
-    const filteredSessions = filterSessionsByTimeRange(sessions, timeRange, timeZone);
+    const filteredSessions = filterSessionsByTimeRange(sessions, timeRange, timeZone, custom);
 
     let verifiedSessionMinutes = 0;
 
     filteredSessions.forEach((s) => {
-        const mediaId = s.mediaId || s.gameId;
+        const mediaId = s.libraryItemId || s.itemId || s.mediaId || s.gameId;
         const isGame = s.mediaType === 'game' || gameMap.has(String(mediaId));
         if (isGame) {
-            if (s.minutes) {
-                verifiedSessionMinutes += Number(s.minutes) || 0;
-            } else if (s.durationSeconds) {
-                verifiedSessionMinutes += Math.round((Number(s.durationSeconds) || 0) / 60);
-            }
+            verifiedSessionMinutes += Number.isFinite(Number(s.activeSeconds)) && s.activeSeconds !== undefined
+                ? Math.max(0, Number(s.activeSeconds) / 60)
+                : (Number(s.minutes) || (Number(s.durationSeconds) || 0) / 60);
         }
     });
 

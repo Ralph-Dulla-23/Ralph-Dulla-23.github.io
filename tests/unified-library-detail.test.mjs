@@ -10,11 +10,11 @@ test('TC-01: App.jsx defines routes for BookDetailPage (/app/books/:id) and Game
     const content = fs.readFileSync(appPath, 'utf8');
 
     assert.ok(
-        content.includes('/app/books/:id'),
+        content.includes('path="books/:id"'),
         'App.jsx must declare route for /app/books/:id'
     );
     assert.ok(
-        content.includes('/app/games/:id'),
+        content.includes('path="games/:id"'),
         'App.jsx must declare route for /app/games/:id'
     );
     assert.ok(

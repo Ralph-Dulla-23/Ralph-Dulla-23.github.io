@@ -206,5 +206,7 @@ test('TC-06: useDiarySessions hook file exists and exports a callable React hook
 
     const content = readFileSync(hookPath, 'utf-8');
     assert.ok(content.includes('useDiarySessions'), 'Must export useDiarySessions');
-    assert.ok(content.includes('observeSessions'), 'Must call observeSessions on diaryRepository');
+    assert.ok(content.includes('getSessionFeed'), 'Hook must use the shared owner-scoped session feed');
+    const feedContent = readFileSync(path.resolve('src/hooks/sessionFeed.js'), 'utf-8');
+    assert.ok(feedContent.includes('observeSessions'), 'Shared feed must subscribe to canonical sessions');
 });

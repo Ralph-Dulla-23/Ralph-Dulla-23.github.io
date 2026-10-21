@@ -210,6 +210,25 @@ export function createDiaryRepository({ db, uid, firestoreOps = {} }) {
             return { success: true, id: sessionId };
         },
 
+        /** Snapshot used only for a user-approved Bookmory migration preview. */
+        async getImportState() {
+            const fetchCollection = async (name) => {
+                const result = await getDocsFn(collectionFn(db, 'users', trimmedUid, name));
+                return result.docs.map((item) => ({ id: item.id, ...item.data() }));
+            };
+            const [items, attempts, sessions, historicalAggregates, journalEntries] = await Promise.all([
+                fetchCollection('libraryItems'), fetchCollection('attempts'), fetchCollection('sessions'),
+                fetchCollection('historicalAggregates'), fetchCollection('journalEntries'),
+            ]);
+            return { items, attempts, sessions, historicalAggregates, journalEntries };
+        },
+
+        observeHistoricalAggregates(callback, onError) {
+            return onSnapshotFn(collectionFn(db, 'users', trimmedUid, 'historicalAggregates'),
+                (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+                onError);
+        },
+
         /**
          * Creates a HistoricalAggregate (isDailySession strictly false).
          */

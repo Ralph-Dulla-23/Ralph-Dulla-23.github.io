@@ -7,6 +7,9 @@ import {
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { OWNER_UID, isOwner } from '../lib/config';
+import { clearSessionFeeds } from '../hooks/sessionFeed';
+import { clearPrivateMediaSubscriptions } from '../lib/db';
+import { flushPublishedItemRefreshes, startPublishedItemAutoRefresh } from '../services/publishedItemSync';
 
 const AuthContext = createContext({
     user: null,
@@ -24,12 +27,18 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         if (!auth) return;
 
+        const stopRefresh = startPublishedItemAutoRefresh();
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            if (currentUser && isOwner(currentUser)) void flushPublishedItemRefreshes();
+            if (!currentUser || !isOwner(currentUser)) {
+                clearSessionFeeds();
+                clearPrivateMediaSubscriptions();
+            }
             setUser(currentUser ?? null);
             setLoading(false);
         });
 
-        return () => unsubscribe();
+        return () => { unsubscribe(); stopRefresh(); };
     }, []);
 
 
@@ -45,9 +54,10 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = async () => {
+        if (auth) await firebaseSignOut(auth);
+        clearSessionFeeds(); // Remove private in-memory session snapshots on sign-out.
+        clearPrivateMediaSubscriptions();
         setUser(null);
-        if (!auth) return;
-        return firebaseSignOut(auth);
     };
 
     const value = {

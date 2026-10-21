@@ -1,3 +1,4 @@
+import DiarySelect from '../../components/ui/DiarySelect';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -28,7 +29,6 @@ import {
     BsX,
     BsLink45Deg,
     BsShare,
-    BsCloudCheck,
     BsCloudArrowUp,
 } from 'react-icons/bs';
 
@@ -241,14 +241,8 @@ export default function JournalPage({ darkMode, setDarkMode }) {
                             <BsJournalText className="w-6 h-6 text-amber-500" />
                             Journal & Reflections
                         </h1>
-                        {syncMetadata?.hasPendingWrites ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full" title="Changes queued offline; will sync when reconnected">
-                                <BsCloudArrowUp className="w-3 h-3 animate-pulse" /> Syncing offline...
-                            </span>
-                        ) : (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full" title="Real-time cloud sync active">
-                                <BsCloudCheck className="w-3 h-3" /> Live Sync
-                            </span>
+                        {syncMetadata?.hasPendingWrites && (
+                            <span role="status" className="text-xs text-amber-700 dark:text-amber-300"><BsCloudArrowUp className="inline-block mr-1" />Unsynced changes</span>
                         )}
                     </div>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -310,7 +304,7 @@ export default function JournalPage({ darkMode, setDarkMode }) {
                                 key={t.id}
                                 type="button"
                                 onClick={() => setTypeFilter(t.id)}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 ${
                                     isSelected
                                         ? 'bg-amber-500 text-white shadow-sm'
                                         : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -357,7 +351,7 @@ export default function JournalPage({ darkMode, setDarkMode }) {
                         return (
                             <article
                                 key={entry.id}
-                                className="bg-white dark:bg-gray-900 rounded-3xl p-5 sm:p-6 border border-gray-200/80 dark:border-gray-800 shadow-sm transition-all hover:shadow-md relative group"
+                                className="diary-feature-card diary-journal-card rounded-3xl p-5 sm:p-6 relative group"
                             >
                                 {/* Card Header */}
                                 <div className="flex items-center justify-between gap-3 mb-3">
@@ -542,27 +536,11 @@ export default function JournalPage({ darkMode, setDarkMode }) {
                                     <BsLink45Deg className="w-4 h-4 text-amber-500" />
                                     Link to Book or Game (Optional)
                                 </label>
-                                <select
-                                    value={linkedMediaId}
-                                    onChange={(e) => setLinkedMediaId(e.target.value)}
-                                    className="w-full px-4 py-2 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-                                >
-                                    <option value="">None (General Reflection)</option>
-                                    <optgroup label="Books">
-                                        {books.map((b) => (
-                                            <option key={`b-${b.id}`} value={b.id}>
-                                                📖 {b.title} {b.author ? `— ${b.author}` : ''}
-                                            </option>
-                                        ))}
-                                    </optgroup>
-                                    <optgroup label="Games">
-                                        {games.map((g) => (
-                                            <option key={`g-${g.id}`} value={g.id}>
-                                                🎮 {g.title} {g.platform ? `(${g.platform})` : ''}
-                                            </option>
-                                        ))}
-                                    </optgroup>
-                                </select>
+                                <DiarySelect label="Link to book or game" value={linkedMediaId} onChange={setLinkedMediaId} options={[
+                                    { value: '', label: 'None (General Reflection)' },
+                                    ...books.map(b => ({ value: String(b.id), label: `📖 ${b.title}${b.author ? ` — ${b.author}` : ''}` })),
+                                    ...games.map(g => ({ value: String(g.id), label: `🎮 ${g.title}${g.platform ? ` (${g.platform})` : ''}` })),
+                                ]} />
                             </div>
 
                             {/* Body (required) */}

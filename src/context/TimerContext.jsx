@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { generateId } from '../domain/id';
 import { useAuth } from './AuthContext';
-import { getDiaryRepository } from '../lib/db';
+import { getDiaryRepository, updateBookProgress } from '../lib/db';
+import { getCurrentLocalDateKey } from '../domain/dates';
 
 const TIMER_STORAGE_KEY = 'canonical_active_activity_timer';
 const LEGACY_STORAGE_KEY = 'active_reading_timer';
@@ -17,7 +18,8 @@ export function ActivityTimerProvider({ children }) {
             if (typeof window === 'undefined') return null;
             const saved = localStorage.getItem(TIMER_STORAGE_KEY);
             if (saved) {
-                return JSON.parse(saved);
+                const previous = JSON.parse(saved);
+                return previous?.state === 'saving' ? { ...previous, state: 'review' } : previous;
             }
             // Check legacy storage
             const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
@@ -45,9 +47,17 @@ export function ActivityTimerProvider({ children }) {
         return null;
     });
 
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(() => {
+        try {
+            const saved = JSON.parse(localStorage.getItem(TIMER_STORAGE_KEY) || 'null');
+            return saved?.state === 'review' || saved?.state === 'saving';
+        } catch { return false; }
+    });
     const [timerConflict, setTimerConflict] = useState(null);
-    const [, setTick] = useState(0);
+    const [focusVisible, setFocusVisible] = useState(false);
+    const [focusOrigin, setFocusOrigin] = useState(null);
+    const [lastSessionResult, setLastSessionResult] = useState(null);
+    const savingRef = useRef(false);
 
     // Persist timer state to localStorage whenever state transitions occur
     useEffect(() => {
@@ -63,14 +73,7 @@ export function ActivityTimerProvider({ children }) {
         }
     }, [activeTimer]);
 
-    // Interval ticker for live UI updates while running
-    useEffect(() => {
-        if (!activeTimer || activeTimer.state !== 'running') return;
-        const interval = setInterval(() => {
-            setTick((t) => t + 1);
-        }, 1000);
-        return () => clearInterval(interval);
-    }, [activeTimer]);
+    // Clock display components own their one-second ticks; the provider only updates on transitions.
 
     const getElapsedSeconds = useCallback(() => {
         if (!activeTimer) return 0;
@@ -82,12 +85,16 @@ export function ActivityTimerProvider({ children }) {
         return baseSeconds;
     }, [activeTimer]);
 
-    const startTimer = useCallback(({ mediaType = 'book', itemId, itemTitle = 'Activity', itemCover = '', fromPage = 0, fromHours = 0, force = false }) => {
-        // TIMER-02: Conflict Guard
-        // If an active timer is running/paused for a different item, guard against silent overwriting
-        if (activeTimer && (activeTimer.state === 'running' || activeTimer.state === 'paused') && activeTimer.itemId !== String(itemId) && !force) {
+    const startTimer = useCallback(({ mediaType = 'book', itemId, itemTitle = 'Activity', itemCover = '', fromPage = 0, totalPages = null, fromHours = 0, force = false }) => {
+        // Reopen the same ongoing session; never silently replace its elapsed time.
+        if (activeTimer && !force) {
+            const sameItem = activeTimer.itemId === String(itemId) && activeTimer.mediaType === mediaType;
+            if (sameItem && ['running', 'paused'].includes(activeTimer.state)) {
+                setFocusVisible(true);
+                return { resumed: true, timer: activeTimer };
+            }
             setTimerConflict({
-                incoming: { mediaType, itemId, itemTitle, itemCover, fromPage, fromHours },
+                incoming: { mediaType, itemId, itemTitle, itemCover, fromPage, totalPages, fromHours },
                 current: activeTimer,
             });
             return { conflict: true, current: activeTimer };
@@ -106,11 +113,15 @@ export function ActivityTimerProvider({ children }) {
             accumulatedActiveMs: 0,
             runningSinceEpochMs: now,
             fromPage: Number(fromPage) || 0,
+            totalPages: Number(totalPages) > 0 ? Number(totalPages) : null,
             fromHours: Number(fromHours) || 0,
             updatedAtISO: new Date(now).toISOString(),
         };
 
         setActiveTimer(newTimer);
+        setLastSessionResult(null);
+        setFocusOrigin(null); // Starting from a detail card uses the lower-screen default origin.
+        setFocusVisible(true);
         setTimerConflict(null);
         return { success: true, timer: newTimer };
     }, [activeTimer]);
@@ -169,6 +180,7 @@ export function ActivityTimerProvider({ children }) {
             };
         });
         setIsModalOpen(true);
+        setFocusVisible(false);
     }, []);
 
     const cancelReview = useCallback(() => {
@@ -181,10 +193,12 @@ export function ActivityTimerProvider({ children }) {
             };
         });
         setIsModalOpen(false);
-    }, []);
+        setFocusVisible((prev) => prev && activeTimer?.mediaType === 'book');
+    }, [activeTimer?.mediaType]);
 
     const saveSession = useCallback(async (reviewPayload = {}) => {
-        if (!activeTimer) return;
+        if (!activeTimer || savingRef.current) return;
+        savingRef.current = true;
         const currentTimer = activeTimer;
 
         // Transition to saving state
@@ -195,31 +209,68 @@ export function ActivityTimerProvider({ children }) {
         }));
 
         try {
-            const activeSeconds = Math.max(0, Number(reviewPayload.activeSeconds) || Math.floor((currentTimer.accumulatedActiveMs || 0) / 1000));
+            const activeSeconds = Math.max(0, Math.floor((currentTimer.accumulatedActiveMs || 0) / 1000));
             const sessionId = currentTimer.sessionId || generateId('sess');
-            const uid = user?.uid || 'anonymous-owner';
+            const uid = user?.uid;
+            if (!uid) throw new Error('Please sign in as the diary owner before saving a session.');
 
             const sessionData = {
                 schemaVersion: 2,
-                id: sessionId,
+                id: sessionId, // Stable for retries: never create a duplicate on retry.
                 libraryItemId: currentTimer.itemId,
                 mediaType: currentTimer.mediaType,
                 source: 'timer',
                 startedAt: currentTimer.startedAtISO || new Date().toISOString(),
-                date: reviewPayload.date || new Date().toISOString().slice(0, 10),
+                date: reviewPayload.date || getCurrentLocalDateKey(),
                 activeSeconds,
-                startPage: reviewPayload.startPage !== undefined ? Number(reviewPayload.startPage) : currentTimer.fromPage,
-                endPage: reviewPayload.endPage !== undefined ? Number(reviewPayload.endPage) : undefined,
-                pagesRead: reviewPayload.pagesRead !== undefined ? Number(reviewPayload.pagesRead) : Math.max(0, (reviewPayload.endPage || 0) - (reviewPayload.startPage || 0)),
                 notes: reviewPayload.notes || reviewPayload.note || null,
                 timezone: reviewPayload.timezone || 'Asia/Manila',
                 createdAt: new Date().toISOString(),
             };
+            // Firestore rejects undefined values. Game sessions have no page fields.
+            if (currentTimer.mediaType === 'book') {
+                const startPage = Number(reviewPayload.startPage ?? currentTimer.fromPage ?? 0);
+                const endPage = Number(reviewPayload.endPage ?? startPage);
+                if (!Number.isFinite(startPage) || !Number.isFinite(endPage) || endPage < startPage) {
+                    throw new Error('Invalid reading page range.');
+                }
+                sessionData.startPage = startPage;
+                sessionData.endPage = endPage;
+                if (currentTimer.totalPages && endPage > currentTimer.totalPages) {
+                    throw new Error(`Ending page cannot exceed the book's ${currentTimer.totalPages} pages.`);
+                }
+                sessionData.pagesRead = Math.max(0, endPage - startPage);
+            }
 
             const repository = getDiaryRepository(uid);
             await repository.createSession(sessionData);
+            let progressWarning = null;
+            // Keep the book's page progress in sync with a completed timed reading session.
+            // If this secondary update fails, the session is already saved; preserve it.
+            if (currentTimer.mediaType === 'book' && sessionData.endPage > sessionData.startPage) {
+                try {
+                    await updateBookProgress(uid, currentTimer.itemId, sessionData.endPage);
+                } catch (progressError) {
+                    console.warn('Session saved; book progress update needs attention:', progressError);
+                    progressWarning = progressError?.message || 'Book progress could not be updated.';
+                }
+            }
 
-            // Successfully saved: clear active timer and close modal
+            // The result is derived from the saved payload, never from a fabricated session.
+            setLastSessionResult({
+                mediaType: currentTimer.mediaType,
+                itemId: currentTimer.itemId,
+                itemTitle: currentTimer.itemTitle,
+                itemCover: currentTimer.itemCover,
+                sessionId,
+                date: sessionData.date,
+                activeSeconds,
+                pagesRead: sessionData.pagesRead ?? null,
+                endPage: sessionData.endPage ?? null,
+                totalPages: currentTimer.totalPages,
+                progressWarning,
+            });
+            setFocusVisible(false);
             setActiveTimer(null);
             setIsModalOpen(false);
             return { success: true, sessionId };
@@ -233,6 +284,8 @@ export function ActivityTimerProvider({ children }) {
                 updatedAtISO: new Date().toISOString(),
             }));
             throw err;
+        } finally {
+            savingRef.current = false;
         }
     }, [activeTimer, user]);
 
@@ -240,9 +293,18 @@ export function ActivityTimerProvider({ children }) {
         setActiveTimer(null);
         setIsModalOpen(false);
         setTimerConflict(null);
+        setFocusVisible(false);
     }, []);
 
+    const closeSessionResult = useCallback(() => setLastSessionResult(null), []);
+    const showFocus = useCallback((origin = null) => {
+        setFocusOrigin(origin && Number.isFinite(origin.x) && Number.isFinite(origin.y) ? origin : null);
+        setFocusVisible(true);
+    }, []);
+    const minimizeFocus = useCallback(() => setFocusVisible(false), []);
+
     const value = useMemo(() => ({
+        focusVisible, focusOrigin, showFocus, minimizeFocus, lastSessionResult, closeSessionResult,
         activeTimer,
         isModalOpen,
         setIsModalOpen,
@@ -257,6 +319,7 @@ export function ActivityTimerProvider({ children }) {
         discardTimer,
         getElapsedSeconds,
     }), [
+        focusVisible, focusOrigin, showFocus, minimizeFocus, lastSessionResult, closeSessionResult,
         activeTimer,
         isModalOpen,
         timerConflict,

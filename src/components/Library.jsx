@@ -1,22 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
-import fallbackBooks, { statusConfig } from '../data/books';
+import { statusConfig } from '../data/books';
 import { observePublicShelf } from '../services/publicShelfService';
 import { OWNER_UID } from '../lib/config';
 import { Link } from 'react-router-dom';
-import { lenisRef } from '../App';
+import { lenisRef } from '../lib/scrollController';
 
 const Library = () => {
     const animRef = useScrollAnimation();
     const carouselRef = useRef(null);
-    const [books, setBooks] = useState(fallbackBooks);
+    const [books, setBooks] = useState([]);
 
     useEffect(() => {
         const unsubscribe = observePublicShelf(OWNER_UID, (items) => {
             const publicBooks = items.filter((item) => item.mediaType === 'book' || !item.mediaType);
-            if (publicBooks && publicBooks.length > 0) {
-                setBooks(publicBooks);
-            }
+            setBooks(publicBooks);
         });
         return () => unsubscribe();
     }, []);

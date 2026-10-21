@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import Lenis from 'lenis';
-import fallbackBooks, { statusConfig, allGenres } from '../data/books';
+import { statusConfig } from '../data/books';
+import GenreFilter from '../components/library/GenreFilter';
 import { observePublicShelf } from '../services/publicShelfService';
 import { OWNER_UID } from '../lib/config';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
@@ -80,9 +81,10 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
     const showDiaryButton = isOwner || isNative;
 
     const [activeTab, setActiveTab] = useState(initialTab);
-    const [books, setBooks] = useState(fallbackBooks);
+    const [books, setBooks] = useState([]);
     const [games, setGames] = useState([]);
     const [gamesLoading, setGamesLoading] = useState(true);
+    const [shelfError, setShelfError] = useState(null);
 
     const [filter, setFilter] = useState('all');
     const [genreFilter, setGenreFilter] = useState('all');
@@ -112,32 +114,42 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
         const unsubscribe = observePublicShelf(OWNER_UID, (items) => {
             const publicBooks = items.filter((item) => item.mediaType === 'book' || !item.mediaType);
             const publicGames = items.filter((item) => item.mediaType === 'game');
-            if (publicBooks.length > 0) {
-                setBooks(publicBooks);
-            }
+            setBooks(publicBooks);
             setGames(publicGames);
+            setGamesLoading(false);
+            setShelfError(null);
+        }, (error) => {
+            setShelfError(error?.code || error?.message || 'Could not load published shelf');
             setGamesLoading(false);
         });
         return () => unsubscribe();
     }, []);
 
     useEffect(() => {
-        const lenis = new Lenis({
+        // Native touch and reduced-motion users do not need a continuous smooth-scroll loop.
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || window.Capacitor?.isNativePlatform?.()) return undefined;
+    const lenis = new Lenis({
             duration: 1.2,
             easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
             smoothWheel: true,
         });
 
-        let rafId;
-        function raf(time) {
-            lenis.raf(time);
-            rafId = requestAnimationFrame(raf);
-        }
-
-        rafId = requestAnimationFrame(raf);
-        lenis.scrollTo(0, { immediate: true });
-        return () => {
+        let rafId = 0;
+    function raf(time) {
+      rafId = 0;
+      if (document.hidden) return;
+      lenis.raf(time);
+      rafId = requestAnimationFrame(raf);
+    }
+    const onVisibility = () => {
+      if (!document.hidden && !rafId) rafId = requestAnimationFrame(raf);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    rafId = requestAnimationFrame(raf);
+    lenis.scrollTo(0, { immediate: true });
+    return () => {
             cancelAnimationFrame(rafId);
+            document.removeEventListener('visibilitychange', onVisibility);
             lenis.destroy();
         };
     }, []);
@@ -158,21 +170,6 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
     });
     const topAuthors = Object.entries(authorCounts).sort((a, b) => b[1] - a[1]);
     const maxAuthorCount = topAuthors[0]?.[1] || 1;
-
-    // Dynamic book genres: combine allGenres with all unique genres found across live books
-    const combinedBookGenres = useMemo(() => {
-        const set = new Set(allGenres);
-        books.forEach((b) => {
-            if (Array.isArray(b.genres)) {
-                b.genres.forEach((g) => {
-                    if (typeof g === 'string' && g.trim()) {
-                        set.add(g.trim());
-                    }
-                });
-            }
-        });
-        return Array.from(set).sort();
-    }, [books]);
 
     const filteredBooks = books.filter(b => {
         const statusMatch = filter === 'all' || filter === b.status || (filter === 'favorites' && b.favorite);
@@ -291,6 +288,11 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
 
     return (
         <div className={`min-h-screen transition-colors ${darkMode ? 'dark bg-gray-950 text-gray-100' : 'bg-background text-primary'}`}>
+            {shelfError && (
+                <div role="alert" className="mx-auto max-w-4xl px-6 pt-4 text-sm text-amber-800 dark:text-amber-300">
+                    Published shelf unavailable ({shelfError}). Check the Firebase project and deployed Firestore rules.
+                </div>
+            )}
             <header className="max-w-4xl mx-auto px-6 pt-10 pb-4" ref={headerRef} data-animate>
                 <div className="flex justify-between items-start mb-6">
                     <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -481,32 +483,7 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                                 ))}
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-xs text-secondary dark:text-gray-400 mr-1">Genre:</span>
-                                <button
-                                    onClick={() => setGenreFilter('all')}
-                                    className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all cursor-pointer ${
-                                        genreFilter === 'all'
-                                            ? 'bg-pink-500 text-white border-pink-500'
-                                            : 'bg-white dark:bg-gray-900 text-secondary dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-gray-400'
-                                    }`}
-                                >
-                                    All
-                                </button>
-                                {combinedBookGenres.map(g => (
-                                    <button
-                                        key={g}
-                                        onClick={() => setGenreFilter(g)}
-                                        className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all cursor-pointer ${
-                                            genreFilter === g
-                                                ? 'bg-pink-500 text-white border-pink-500'
-                                                : 'bg-white dark:bg-gray-900 text-secondary dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-gray-400'
-                                        }`}
-                                    >
-                                        {g}
-                                    </button>
-                                ))}
-                            </div>
+                            <GenreFilter books={books} value={genreFilter} onChange={setGenreFilter} />
                         </section>
 
                         {/* Book Grid */}

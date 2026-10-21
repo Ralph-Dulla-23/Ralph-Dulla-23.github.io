@@ -1,16 +1,28 @@
 name: Deploy to GitHub Pages
 
+# Phase 12: production publishing requires an explicit manual release decision.
+# Configure required reviewers for the `diary-production` GitHub environment.
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: 'Type DEPLOY_APPROVED after all release acceptance checks pass'
+        required: true
+        type: string
+
+concurrency:
+  group: diary-pages-production
+  cancel-in-progress: false
 
 permissions:
   contents: write
 
 jobs:
   build-and-deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirm_production == 'DEPLOY_APPROVED' }}
     runs-on: ubuntu-latest
+    environment:
+      name: diary-production
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,7 +30,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
       - name: Install dependencies
@@ -29,6 +41,15 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Verify Firebase configuration
+        run: node scripts/verify-firebase-config.mjs
+        env:
+          VITE_OWNER_UID: ${{ secrets.VITE_OWNER_UID }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
 
       - name: Build
         run: npm run build
