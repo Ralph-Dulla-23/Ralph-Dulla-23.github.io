@@ -134,12 +134,15 @@ export default function BookDetailPage({ darkMode, setDarkMode }) {
     }, [user, book?.id]);
 
     const [isPublished, setIsPublished] = useState(false);
+    const [publicationChecked, setPublicationChecked] = useState(false);
 
     // Subscribe to public shelf updates
     useEffect(() => {
         if (!user || !book?.id) return;
+        setPublicationChecked(false);
         const unsub = watchPublicShelf(user.uid, (shelf) => {
             setIsPublished(shelf.some((item) => String(item.id) === String(book.id)));
+            setPublicationChecked(true);
         });
         return () => unsub();
     }, [user, book?.id]);
@@ -303,6 +306,13 @@ export default function BookDetailPage({ darkMode, setDarkMode }) {
                     </button>
                 </div>
             </div>
+
+            {publicationChecked && !isPublished && (
+                <p className="-mt-2 mb-6 flex items-start gap-2 text-xs leading-5 text-secondary dark:text-gray-400">
+                    <BsInfoCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span>This book is private and won’t appear on your public library until you publish it. Published book details update when you save changes, subject to their visibility settings.</span>
+                </p>
+            )}
 
             {/* Book Header Card */}
             <div className="diary-feature-card rounded-3xl p-5 sm:p-8 mb-6">

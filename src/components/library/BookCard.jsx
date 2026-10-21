@@ -23,6 +23,8 @@ const BookCard = ({ book, onClick }) => {
     };
     const coverSrc = book.cover || (book.coverId ? `https://covers.openlibrary.org/b/id/${book.coverId}-L.jpg` : '');
     const genres = Array.isArray(book.genres) ? book.genres : [];
+    const visibleGenres = genres.slice(0, 3);
+    const remainingGenres = Math.max(0, genres.length - visibleGenres.length);
 
     return (
         <div
@@ -57,9 +59,18 @@ const BookCard = ({ book, onClick }) => {
                     <div className={`h-full rounded-full ${config.barColor}`} style={{ width: `${book.progress || 0}%` }} />
                 </div>
                 <div className="flex flex-wrap gap-1 mt-2">
-                    {genres.map(g => (
+                    {visibleGenres.map(g => (
                         <span key={g} className="text-[10px] px-1.5 py-0.5 rounded-full bg-pink-50 text-pink-600 dark:bg-pink-900/20 dark:text-pink-400">{g}</span>
                     ))}
+                    {remainingGenres > 0 && (
+                        <span
+                            className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                            aria-label={`${remainingGenres} more genres`}
+                            title={`${remainingGenres} more genres`}
+                        >
+                            +{remainingGenres}
+                        </span>
+                    )}
                 </div>
             </div>
         </div>
