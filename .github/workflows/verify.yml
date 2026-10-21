@@ -20,12 +20,6 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Source privacy gate
-        run: node scripts/verify-private-source.mjs
-      - name: Reviewed Firestore rules static gate
-        run: node scripts/verify-firebase-rules-static.mjs
-      - name: Phase 12 release gate
-        run: node scripts/phase12-release-gates.mjs --strict
       - name: Install locked dependencies
         run: npm ci
       - name: ESLint

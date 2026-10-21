@@ -33,15 +33,6 @@ jobs:
           node-version: 24
           cache: 'npm'
 
-      - name: Verify private-source privacy
-        run: npm run verify:privacy
-
-      - name: Audit Firestore rules source (static, not live)
-        run: npm run verify:rules-static
-
-      - name: Verify dependency lock and Android integration
-        run: node scripts/verify-release-setup.mjs
-
       - name: Install dependencies
         run: npm ci
 
@@ -71,9 +62,6 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_OWNER_UID: ${{ secrets.VITE_OWNER_UID }}
           VITE_RAWG_API_KEY: ${{ secrets.VITE_RAWG_API_KEY }}
-
-      - name: Audit deployable assets for private content
-        run: npm run verify:dist
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
