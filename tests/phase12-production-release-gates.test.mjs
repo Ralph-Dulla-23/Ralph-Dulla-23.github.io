@@ -48,7 +48,7 @@ test('Push and PR verification cannot trigger a production deployment', () => {
 
 test('Read-only gate rejects automated production publication and missing approval', () => fixture(dir => {
   const path = resolve(dir, '.github/workflows/deploy.yml');
-  const original = readFileSync(path, 'utf8');
+  const original = readFileSync(path, 'utf8').replace(/\r?\n/g, '\n');
   writeFileSync(path, original.replace('  workflow_dispatch:\n', '  push:\n    branches: [main]\n  workflow_dispatch:\n'));
   assert.equal(checkPhase12ReleaseSource(dir).checks.find(c => c.id === 'manual-production-only').status, 'block');
   writeFileSync(path, original.replace("inputs.confirm_production == 'DEPLOY_APPROVED'", 'true'));
