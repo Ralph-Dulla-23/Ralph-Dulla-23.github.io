@@ -134,15 +134,15 @@ export default function BookDetailPage({ darkMode, setDarkMode }) {
     }, [user, book?.id]);
 
     const [isPublished, setIsPublished] = useState(false);
-    const [publicationChecked, setPublicationChecked] = useState(false);
+    const [checkedBookId, setCheckedBookId] = useState(null);
+    const publicationChecked = checkedBookId === book?.id;
 
     // Subscribe to public shelf updates
     useEffect(() => {
         if (!user || !book?.id) return;
-        setPublicationChecked(false);
         const unsub = watchPublicShelf(user.uid, (shelf) => {
             setIsPublished(shelf.some((item) => String(item.id) === String(book.id)));
-            setPublicationChecked(true);
+            setCheckedBookId(book.id);
         });
         return () => unsub();
     }, [user, book?.id]);
