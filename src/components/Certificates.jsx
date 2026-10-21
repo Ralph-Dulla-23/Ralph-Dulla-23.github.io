@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
-import { lenisRef } from '../App';
+import { lenisRef } from '../lib/scrollController';
 
 const certificates = [
     {

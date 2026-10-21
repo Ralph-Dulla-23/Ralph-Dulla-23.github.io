@@ -1,5 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
+import DiaryEditorModal from '../../components/ui/DiaryEditorModal';
+import DiarySelect from '../../components/ui/DiarySelect';
+import ConfirmDiscardDialog from '../../components/ui/ConfirmDiscardDialog';
+import BookmoryImportPreview from '../../components/diary/BookmoryImportPreview';
+import { useEditorDraftGuard } from '../../hooks/useEditorDraftGuard';
 import { Link, useSearchParams } from 'react-router-dom';
 import BottomTabs from '../../components/navigation/BottomTabs';
 import LibrarySegmentedSwitch from '../../components/library/LibrarySegmentedSwitch';
@@ -9,8 +14,6 @@ import {
     deleteBook,
     watchPublicBooks,
     getBookPrivateNotes,
-    syncLocalToCloud,
-    pullBooksFromCloud,
     getDiaryRepository,
     saveJournalEntry,
 } from '../../lib/db';
@@ -21,7 +24,7 @@ import {
     previewMigrationBatch,
     executeMigrationBatch,
 } from '../../lib/bookmory';
-import ReadingTimerModal from '../../components/books/ReadingTimerModal';
+import { useTimer } from '../../context/TimerContext';
 import {
     BsPlusLg,
     BsStarFill,
@@ -31,11 +34,7 @@ import {
     BsPencilSquare,
     BsSearch,
     BsHeartFill,
-    BsCloudArrowUp,
-    BsCloudDownload,
     BsFileEarmarkArrowUp,
-    BsExclamationTriangle,
-    BsX,
 } from 'react-icons/bs';
 
 const statusTabs = [
@@ -58,7 +57,19 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
     // Add / Edit Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingBook, setEditingBook] = useState(null);
-    const [timerBook, setTimerBook] = useState(null);
+    const { startTimer } = useTimer();
+    const handleStartReading = useCallback((book) => {
+        if (!book) return;
+        const id = String(book.id || book.coverId || (book.title || 'book').replace(/\s+/g, '-').toLowerCase());
+        startTimer({
+            mediaType: 'book',
+            itemId: id,
+            itemTitle: book.title,
+            itemCover: book.cover || (book.coverId ? `https://covers.openlibrary.org/b/id/${book.coverId}-M.jpg` : ''),
+            fromPage: book.currentPage || 0,
+            totalPages: book.pages || null,
+        });
+    }, [startTimer]);
     const [title, setTitle] = useState('');
     const [author, setAuthor] = useState('');
     const [pages, setPages] = useState('');
@@ -72,6 +83,9 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
     const [currentOlKey, setCurrentOlKey] = useState('');
     const [currentCoverId, setCurrentCoverId] = useState(null);
     const [saving, setSaving] = useState(false);
+    const editSignature = JSON.stringify([title, author, pages, currentPage, status, rating, cover, favorite, genres, privateNotes]);
+    const closeEditorNow = useCallback(() => setIsModalOpen(false), []);
+    const draftGuard = useEditorDraftGuard(isModalOpen, editSignature, closeEditorNow);
 
     // Open Library + iTunes Books Auto-Search
     const [searchQuery, setSearchQuery] = useState('');
@@ -84,8 +98,6 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
     const [importing, setImporting] = useState(false);
     const [importPreview, setImportPreview] = useState(null);
     const [executingImport, setExecutingImport] = useState(false);
-    const [syncing, setSyncing] = useState(false);
-    const [pulling, setPulling] = useState(false);
     const [importMsg, setImportMsg] = useState(null);
     const [searchParams, setSearchParams] = useSearchParams();
 
@@ -178,7 +190,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
             } else if (action === 'log') {
                 const readingBook = books.find((b) => b.status === 'reading') || books[0];
                 if (readingBook) {
-                    setTimerBook(readingBook);
+                    handleStartReading(readingBook);
                 } else {
                     openAddModal();
                 }
@@ -191,7 +203,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
         }, 0);
 
         return () => clearTimeout(timer);
-    }, [searchParams, setSearchParams, books]);
+    }, [searchParams, setSearchParams, books, handleStartReading]);
 
     const openEditModal = async (book) => {
         const safeBookId = String(
@@ -244,7 +256,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
     const selectOLBook = (book) => {
         setTitle(book.title || '');
         setAuthor(book.author || (Array.isArray(book.authors) ? book.authors.join(', ') : '') || 'Unknown Author');
-        setPages(String(book.pages || 350));
+        setPages(book.pages != null ? String(book.pages) : '');
         if (book.cover) setCover(book.cover);
         if (book.genres?.length) setGenres(book.genres.join(', '));
         if (book.olKey) setCurrentOlKey(book.olKey);
@@ -264,6 +276,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
             await saveBook(
                 user.uid,
                 {
+                    ...(editingBook || {}),
                     id: editingBook?.id,
                     olKey: editingBook?.olKey || currentOlKey,
                     coverId: editingBook?.coverId || currentCoverId,
@@ -300,57 +313,6 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
         }
     };
 
-    const reportSync = async (prefix = '') => {
-        const res = await syncLocalToCloud(user.uid);
-        if (res.error) {
-            setImportMsg({
-                type: 'warn',
-                text:
-                    `${prefix}Saved on this device, but NOT synced to Firebase:\n${res.error}\n` +
-                    'Publish the Firestore rules in Firebase Console, then tap "Sync to Cloud".',
-            });
-        } else {
-            setImportMsg({
-                type: 'ok',
-                text: `${prefix}Synced to Firebase: ${res.books} books, ${res.sessions} reading sessions, ${res.games} games.`,
-            });
-        }
-    };
-
-    const handlePull = async () => {
-        setPulling(true);
-        setImportMsg({ type: 'ok', text: 'Pulling latest data from Firebase database...' });
-        try {
-            const res = await pullBooksFromCloud(user.uid);
-            if (res.error) {
-                setImportMsg({
-                    type: 'warn',
-                    text: `Could not pull from Firebase:\n${res.error}\nMake sure your device has internet access.`,
-                });
-            } else {
-                setImportMsg({
-                    type: 'ok',
-                    text: `Successfully pulled ${res.books} books and ${res.sessions} reading sessions from Firebase!`,
-                });
-                setTimeout(() => setImportMsg(null), 5000);
-            }
-        } catch (err) {
-            setImportMsg({ type: 'error', text: 'Failed to pull from database: ' + err.message });
-        } finally {
-            setPulling(false);
-        }
-    };
-
-    const handleSync = async () => {
-        setSyncing(true);
-        setImportMsg(null);
-        try {
-            await reportSync();
-        } finally {
-            setSyncing(false);
-        }
-    };
-
     const handleImportFiles = async (e) => {
         const files = Array.from(e.target.files || []);
         e.target.value = '';
@@ -361,11 +323,26 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
             const candidates = [];
             for (const f of files) {
                 const text = await f.text();
-                const pure = parseBookmoryMarkdownPure(text);
+                let markdownRecords = [text];
+                if (f.name.toLowerCase().endsWith('.bookmory')) throw new Error('Native .bookmory is a SQLite backup. First run scripts/convert_bookmory_backup.py locally, then choose its private JSON output.');
+                if (f.name.toLowerCase().endsWith('.json')) {
+                    const batch = JSON.parse(text);
+                    if (batch?.format === 'bookmory-native-candidates-v1' && Array.isArray(batch.entries)) {
+                        if (batch.entries.length > 5000) throw new Error('Import too large.');
+                        candidates.push(...batch.entries.filter((c) => c?.item?.title && c?.item?.mediaType === 'book'));
+                        continue;
+                    }
+                    if (batch?.format !== 'bookmory-markdown-batch-v1' || !Array.isArray(batch.entries)) {
+                        throw new Error('Choose the supplied Bookmory import JSON file or individual .md files.');
+                    }
+                    markdownRecords = batch.entries.map((entry) => entry.markdown);
+                }
+                for (const markdown of markdownRecords) {
+                const pure = parseBookmoryMarkdownPure(markdown);
                 if (pure && pure.item) {
                     candidates.push(pure);
                 } else {
-                    const fallback = parseBookmoryMarkdown(text);
+                    const fallback = parseBookmoryMarkdown(markdown);
                     if (fallback) {
                         candidates.push({
                             item: {
@@ -392,18 +369,21 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                         });
                     }
                 }
+                }
             }
 
             if (!candidates.length) {
-                setImportMsg({ type: 'error', text: 'No Bookmory books found in the selected files. Select the .md files from the export.' });
+                setImportMsg({ type: 'error', text: 'No Bookmory books found. Select the converted native JSON batch, prepared Markdown JSON batch, or individual .md files.' });
                 return;
             }
 
             // Pure dry-run calculation without any mutations (DATA-01)
+            const remoteState = await getDiaryRepository(user.uid).getImportState();
+            const existingCanonicalIds = new Set(remoteState.items.map((item) => item.id));
+            // The legacy Books screen remains authoritative for current page/cover during the cutover.
             const previewReport = previewMigrationBatch(candidates, {
-                items: books,
-                historicalAggregates: [],
-                sessions: [],
+                ...remoteState,
+                items: [...books.filter((book) => !existingCanonicalIds.has(book.id)), ...remoteState.items],
             });
 
             setImportPreview({
@@ -453,14 +433,22 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                             status: item.status,
                             rating: item.rating,
                             favorite: item.favorite,
-                            cover: item.cover || '',
+                            isbn: item.isbn || null,
+                            publisher: item.publisher || null,
+                            publicationDate: item.publicationDate || null,
+                            language: item.language || null,
+                            bookFormat: item.bookFormat || null,
+                            purchases: item.purchases || [],
+                            wishlist: item.wishlist || false,
+                            bookmoryLogCount: item.bookmoryLogCount || 0,
+                            cover: item.cover || '', 
                             coverId: item.coverId || null,
                             olKey: item.olKey || '',
                             genres: item.tags || item.genres || [],
                             startedOn: item.startedOn || '',
                             finishedOn: item.finishedOn || '',
                         },
-                        item.privateNotes || ''
+                        undefined // Never overwrite a private note during metadata import.
                     );
                 } catch (err) {
                     console.warn(`Local mirror update for ${item.title}:`, err);
@@ -484,8 +472,8 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
             }
 
             setImportPreview(null);
-            const summaryText = `Safe import complete: ${executionResult.importedCount} books imported/updated, ${report.summary.duplicates} duplicates skipped.`;
-            await reportSync(summaryText + '\n');
+            const summaryText = `Safe import complete: ${executionResult.importedCount} books, ${executionResult.sessionsCount || 0} precisely timed sessions, ${report.summary.duplicates} duplicates skipped.`;
+            setImportMsg({ type: 'ok', text: summaryText + '\nChanges are saved to Firebase automatically when connected.' });
         } catch (err) {
             setImportMsg({ type: 'error', text: `Execution failed: ${err.message}` });
         } finally {
@@ -527,37 +515,17 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                     <input
                         ref={importInputRef}
                         type="file"
-                        accept=".md,.txt,text/markdown,text/plain"
+                        accept=".md,.txt,.json,text/markdown,text/plain,application/json"
                         multiple
                         className="hidden"
                         onChange={handleImportFiles}
                     />
 
                     <button
-                        onClick={handlePull}
-                        disabled={pulling}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-xs font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors cursor-pointer disabled:opacity-60"
-                        title="Pull all latest books, reading sessions, and notes from Firebase database"
-                    >
-                        <BsCloudDownload className={`w-4 h-4 ${pulling ? 'animate-bounce' : ''}`} />
-                        {pulling ? 'Pulling...' : 'Pull from Database'}
-                    </button>
-
-                    <button
-                        onClick={handleSync}
-                        disabled={syncing}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-secondary dark:text-gray-300 hover:text-primary dark:hover:text-gray-100 transition-colors cursor-pointer disabled:opacity-60"
-                        title="Push local books and reading sessions to Firebase"
-                    >
-                        <BsCloudArrowUp className="w-4 h-4" />
-                        {syncing ? 'Pushing...' : 'Push to Cloud'}
-                    </button>
-
-                    <button
                         onClick={() => importInputRef.current?.click()}
                         disabled={importing}
                         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-secondary dark:text-gray-300 hover:text-primary dark:hover:text-gray-100 transition-colors cursor-pointer disabled:opacity-60"
-                        title="Select all the .md files from your Bookmory export"
+                        title="Choose private native-converted Bookmory JSON, prepared 51-book JSON, or exported .md files"
                     >
                         <BsFileEarmarkArrowUp className="w-4 h-4" />
                         {importing ? 'Importing...' : 'Import Files'}
@@ -622,7 +590,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                         <button
                             key={tab.key}
                             onClick={() => setFilter(tab.key)}
-                            className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all cursor-pointer whitespace-nowrap ${
+                            className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-colors cursor-pointer whitespace-nowrap ${
                                 filter === tab.key
                                     ? 'bg-primary text-white dark:bg-gray-100 dark:text-gray-900'
                                     : 'bg-white dark:bg-gray-900 text-secondary dark:text-gray-400 border border-border dark:border-gray-800 hover:border-gray-400'
@@ -654,8 +622,9 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                 <div className="text-center py-16 bg-white dark:bg-gray-900 border border-dashed border-border dark:border-gray-800 rounded-2xl p-8">
                     <BsBook className="w-10 h-10 text-secondary dark:text-gray-600 mx-auto mb-3" />
                     <p className="text-sm font-semibold text-primary dark:text-gray-200">
-                        No books in this shelf
+                        {books.length === 0 ? 'Your bookshelf is waiting' : 'No books match these filters'}
                     </p>
+                    {books.length > 0 && <button type="button" onClick={() => { setFilter('all'); setLibrarySearch(''); }} className="diary-press mt-4 min-h-11 px-4 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-semibold">Clear filters</button>}
                 </div>
             ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -676,8 +645,10 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                             <img
                                                 src={coverSrc}
                                                 alt={book.title}
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                className="w-full h-full object-contain group-hover:scale-[1.025] transition-transform duration-300"
                                                 loading="lazy"
+                                                decoding="async"
+                                                width="176" height="264"
                                             />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center p-2 text-center text-xs text-secondary">
@@ -698,7 +669,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                     </div>
 
                                     <div className="p-3">
-                                        <h3 className="font-semibold text-xs text-primary dark:text-gray-100 truncate group-hover:text-blue-500 transition-colors">
+                                        <h3 className="font-semibold text-xs text-primary dark:text-gray-100 line-clamp-2 min-h-[2rem] group-hover:text-blue-500 transition-colors">
                                             {book.title}
                                         </h3>
                                         <p className="text-[11px] text-secondary dark:text-gray-400 truncate mt-0.5">
@@ -708,7 +679,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                         {/* Progress bar */}
                                         <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                                             <div
-                                                className={`h-full rounded-full transition-all ${
+                                                className={`h-full rounded-full diary-progress-fill ${
                                                     book.status === 'completed'
                                                         ? 'bg-green-500'
                                                         : book.status === 'want-to-read'
@@ -728,9 +699,9 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            setTimerBook(bookWithId);
+                                            handleStartReading(bookWithId);
                                         }}
-                                        className="p-1.5 text-secondary dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 cursor-pointer"
+                                        className="diary-press min-w-11 min-h-11 inline-flex items-center justify-center text-secondary dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 cursor-pointer"
                                         title="Reading Timer"
                                     >
                                         <BsClock className="w-3.5 h-3.5" />
@@ -740,7 +711,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                             e.stopPropagation();
                                             openEditModal(bookWithId);
                                         }}
-                                        className="p-1.5 text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 cursor-pointer"
+                                        className="diary-press min-w-11 min-h-11 inline-flex items-center justify-center text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 cursor-pointer"
                                         title="Edit Book"
                                     >
                                         <BsPencilSquare className="w-3.5 h-3.5" />
@@ -750,7 +721,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                             e.stopPropagation();
                                             handleDelete(safeBookId);
                                         }}
-                                        className="p-1.5 text-secondary dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 cursor-pointer"
+                                        className="diary-press min-w-11 min-h-11 inline-flex items-center justify-center text-secondary dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 cursor-pointer"
                                         title="Delete Book"
                                     >
                                         <BsTrash3 className="w-3.5 h-3.5" />
@@ -764,17 +735,10 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
 
             {/* Add / Edit Book Modal */}
             {isModalOpen && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto"
-                    onClick={() => setIsModalOpen(false)}
-                >
-                    <div
-                        className="bg-white dark:bg-gray-900 border border-border dark:border-gray-800 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl my-8"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <h2 className="text-xl font-display font-bold text-primary dark:text-gray-100 mb-4">
-                            {editingBook ? 'Edit Book' : 'Add Book to Shelf'}
-                        </h2>
+                <DiaryEditorModal title={editingBook ? 'Edit Book' : 'Add Book to Shelf'} onClose={draftGuard.requestClose} busy={saving} footer={<>
+                    <button type="button" onClick={draftGuard.requestClose} disabled={saving} className="min-h-11 rounded-xl px-5 text-sm font-semibold text-gray-600 dark:text-gray-300">Cancel</button>
+                    <button type="submit" form="book-editor-form" disabled={saving} className="min-h-11 rounded-xl bg-sky-600 px-6 text-sm font-bold text-white disabled:opacity-60">{saving ? 'Saving…' : 'Save Book'}</button>
+                </>}>
 
                         {/* Auto-Search Books (Open Library + iTunes Books) */}
                         <form onSubmit={handleSearchOL} className="mb-4">
@@ -851,7 +815,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                             )}
                         </form>
 
-                        <form onSubmit={handleSave} className="space-y-3">
+                        <form id="book-editor-form" onSubmit={handleSave} className="space-y-3">
                             <div>
                                 <label className="block text-xs font-medium text-secondary dark:text-gray-400 mb-1">
                                     Book Title *
@@ -883,16 +847,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                     <label className="block text-xs font-medium text-secondary dark:text-gray-400 mb-1">
                                         Shelf Status
                                     </label>
-                                    <select
-                                        value={status}
-                                        onChange={(e) => setStatus(e.target.value)}
-                                        className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-border dark:border-gray-700 rounded-lg text-sm"
-                                    >
-                                        <option value="reading">Reading</option>
-                                        <option value="completed">Completed</option>
-                                        <option value="want-to-read">Want to Read</option>
-                                        <option value="dropped">Dropped</option>
-                                    </select>
+                                    <DiarySelect label="Shelf status" value={status} onChange={setStatus} options={[{ value: 'reading', label: 'Reading' },{ value: 'completed', label: 'Completed' },{ value: 'want-to-read', label: 'Want to Read' },{ value: 'dropped', label: 'Dropped' }]} />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-secondary dark:text-gray-400 mb-1">
@@ -997,180 +952,13 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-border dark:border-gray-700 rounded-lg text-xs resize-none"
                                 />
                             </div>
-
-                            <div className="flex gap-2 justify-end pt-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="px-4 py-2 rounded-xl text-xs font-semibold text-secondary hover:text-primary dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={saving}
-                                    className="px-5 py-2 rounded-xl bg-primary dark:bg-gray-100 text-white dark:text-gray-900 text-xs font-semibold cursor-pointer disabled:opacity-60"
-                                >
-                                    {saving ? 'Saving...' : 'Save Book'}
-                                </button>
-                            </div>
                         </form>
-                    </div>
-                </div>
+                </DiaryEditorModal>
             )}
+            {draftGuard.confirmDiscard && <ConfirmDiscardDialog onStay={draftGuard.keepEditing} onDiscard={draftGuard.discard}/>}
 
-            {/* Bookmory Safe Import Preview Modal (PR 10) */}
-            {importPreview && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="import-preview-title"
-                >
-                    <div className={`relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden ${
-                        darkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
-                    }`}>
-                        {/* Header */}
-                        <div className="flex items-center justify-between p-5 border-b border-inherit">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500">
-                                    <BsFileEarmarkArrowUp className="text-xl" />
-                                </div>
-                                <div>
-                                    <h3 id="import-preview-title" className="text-lg font-bold">Bookmory Import Preview</h3>
-                                    <p className="text-xs text-secondary dark:text-gray-400">
-                                        {importPreview.filesCount} file(s) analyzed · Pure dry-run preview (0 writes made yet)
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => setImportPreview(null)}
-                                disabled={executingImport}
-                                className="p-2 rounded-lg text-secondary hover:text-primary dark:text-gray-400 dark:hover:text-gray-200 hover:bg-slate-800/50 transition-colors"
-                                aria-label="Close preview"
-                            >
-                                <BsX className="text-2xl" />
-                            </button>
-                        </div>
+            {importPreview && <BookmoryImportPreview preview={importPreview} busy={executingImport} onClose={() => setImportPreview(null)} onConfirm={handleConfirmImport} />}
 
-                        {/* Body */}
-                        <div className="flex-1 overflow-y-auto p-5 space-y-5">
-                            {/* Summary Metrics */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                <div className={`p-3 rounded-xl border text-center ${
-                                    darkMode ? 'bg-slate-800/50 border-slate-700/60' : 'bg-slate-50 border-slate-200'
-                                }`}>
-                                    <div className="text-2xl font-bold text-emerald-500">{importPreview.previewReport.summary.additions}</div>
-                                    <div className="text-xs text-secondary dark:text-gray-400 mt-0.5">New Books</div>
-                                </div>
-                                <div className={`p-3 rounded-xl border text-center ${
-                                    darkMode ? 'bg-slate-800/50 border-slate-700/60' : 'bg-slate-50 border-slate-200'
-                                }`}>
-                                    <div className="text-2xl font-bold text-blue-500">{importPreview.previewReport.summary.duplicates}</div>
-                                    <div className="text-xs text-secondary dark:text-gray-400 mt-0.5">Duplicates (Skip)</div>
-                                </div>
-                                <div className={`p-3 rounded-xl border text-center ${
-                                    darkMode ? 'bg-slate-800/50 border-slate-700/60' : 'bg-slate-50 border-slate-200'
-                                }`}>
-                                    <div className="text-2xl font-bold text-purple-500">{importPreview.previewReport.summary.historicalAggregatesCount}</div>
-                                    <div className="text-xs text-secondary dark:text-gray-400 mt-0.5">Reading Periods</div>
-                                </div>
-                                <div className={`p-3 rounded-xl border text-center ${
-                                    darkMode ? 'bg-slate-800/50 border-slate-700/60' : 'bg-slate-50 border-slate-200'
-                                }`}>
-                                    <div className="text-2xl font-bold text-amber-500">{importPreview.previewReport.summary.journalEntriesCount}</div>
-                                    <div className="text-xs text-secondary dark:text-gray-400 mt-0.5">Private Reviews</div>
-                                </div>
-                            </div>
-
-                            {/* Warnings / Collisions */}
-                            {importPreview.previewReport.warnings?.length > 0 && (
-                                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs space-y-1">
-                                    <div className="font-semibold flex items-center gap-1.5 text-amber-400">
-                                        <BsExclamationTriangle />
-                                        <span>Warnings & Edge Cases ({importPreview.previewReport.warnings.length})</span>
-                                    </div>
-                                    <ul className="list-disc list-inside space-y-0.5 text-secondary dark:text-gray-300">
-                                        {importPreview.previewReport.warnings.slice(0, 5).map((w, idx) => (
-                                            <li key={idx}>
-                                                <strong className="text-amber-300">{w.title || w.code}:</strong> {w.message || (w.collisions ? `${w.collisions.length} collision(s)` : '')}
-                                            </li>
-                                        ))}
-                                        {importPreview.previewReport.warnings.length > 5 && (
-                                            <li className="italic text-secondary dark:text-gray-400">+ {importPreview.previewReport.warnings.length - 5} more warnings</li>
-                                        )}
-                                    </ul>
-                                </div>
-                            )}
-
-                            {/* Planned Action Diff */}
-                            <div>
-                                <h4 className="text-xs font-semibold uppercase tracking-wider text-secondary dark:text-gray-400 mb-2">Planned Action Diff</h4>
-                                <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-                                    {importPreview.previewReport.diff.map((item, idx) => (
-                                        <div
-                                            key={idx}
-                                            className={`flex items-center justify-between p-2.5 rounded-lg text-xs border ${
-                                                item.type === 'duplicate'
-                                                    ? (darkMode ? 'bg-slate-800/30 border-slate-800 text-slate-400' : 'bg-slate-100/60 border-slate-200 text-slate-500')
-                                                    : item.type === 'update'
-                                                    ? (darkMode ? 'bg-blue-500/10 border-blue-500/20 text-blue-200' : 'bg-blue-50 border-blue-200 text-blue-800')
-                                                    : (darkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-200' : 'bg-emerald-50 border-emerald-200 text-emerald-800')
-                                            }`}
-                                        >
-                                            <span className="font-medium truncate max-w-[280px] sm:max-w-md">{item.title}</span>
-                                            <span className={`px-2 py-0.5 rounded-full font-semibold uppercase text-[10px] ${
-                                                item.type === 'duplicate'
-                                                    ? 'bg-slate-700/50 text-slate-300'
-                                                    : item.type === 'update'
-                                                    ? 'bg-blue-500/20 text-blue-400'
-                                                    : 'bg-emerald-500/20 text-emerald-400'
-                                            }`}>
-                                                {item.type === 'duplicate' ? 'Skip (duplicate)' : item.type === 'update' ? 'Update' : 'New Add'}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Footer Actions */}
-                        <div className="flex items-center justify-end gap-3 p-4 border-t border-inherit bg-slate-900/40">
-                            <button
-                                type="button"
-                                onClick={() => setImportPreview(null)}
-                                disabled={executingImport}
-                                className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleConfirmImport}
-                                disabled={executingImport || (importPreview.previewReport.summary.additions === 0 && importPreview.previewReport.summary.updates === 0)}
-                                className="flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {executingImport ? (
-                                    <>
-                                        <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                                        <span>Importing...</span>
-                                    </>
-                                ) : (
-                                    <span>Confirm Import</span>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Reading Timer Modal */}
-            <ReadingTimerModal
-                book={timerBook}
-                isOpen={Boolean(timerBook)}
-                onClose={() => setTimerBook(null)}
-                onSessionSaved={() => {}}
-            />
         </BottomTabs>
     );
 };

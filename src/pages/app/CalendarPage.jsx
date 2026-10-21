@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import PropTypes from 'prop-types';
+import DiarySelect from '../../components/ui/DiarySelect';
+import { exportCalendarPng } from '../../domain/calendarExport.js';
 import { Link } from 'react-router-dom';
 import { DiaryShell } from '../../components/diary/DiaryShell';
 import { useAuth } from '../../context/AuthContext';
@@ -20,18 +22,17 @@ import {
     BsClock,
     BsBookmarkCheck,
     BsFilter,
-    BsCloudCheck,
     BsCloudArrowUp,
 } from 'react-icons/bs';
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function getDaysInMonth(year, month) {
     return new Date(year, month + 1, 0).getDate();
 }
 
 function getFirstDayOfMonth(year, month) {
-    return new Date(year, month, 1).getDay();
+    return (new Date(year, month, 1).getDay() + 6) % 7;
 }
 
 function formatDateKey(year, month, day) {
@@ -47,16 +48,25 @@ export default function CalendarPage({ darkMode, setDarkMode }) {
     const [legacySessions, setLegacySessions] = useState([]);
 
     // Live reactive subscription to canonical sessions (PR 08)
-    const { sessions: canonicalSessions, metadata: sessionMetadata } = useDiarySessions();
+    const { sessions: canonicalSessions, metadata: sessionMetadata, error: sessionError } = useDiarySessions();
 
     // Calendar navigation state
     const todayDate = useMemo(() => new Date(), []);
     const [currentYear, setCurrentYear] = useState(todayDate.getFullYear());
     const [currentMonth, setCurrentMonth] = useState(todayDate.getMonth()); // 0-indexed
+    const [monthDirection, setMonthDirection] = useState('forward');
 
     // Filters and detail selection
     const [mediaFilter, setMediaFilter] = useState('all'); // 'all' | 'books' | 'games'
     const [selectedDate, setSelectedDate] = useState(null);
+    const [exportOpen, setExportOpen] = useState(false);
+    const [exportRatio, setExportRatio] = useState('4:5');
+    const [exportBackground, setExportBackground] = useState('midnight');
+    const [exportPhoto, setExportPhoto] = useState(null);
+    const [exportDestination, setExportDestination] = useState('downloads');
+    const [exportError, setExportError] = useState('');
+    const [exportNotice, setExportNotice] = useState('');
+    const [exporting, setExporting] = useState(false);
 
     // Subscribe to books and games
     useEffect(() => {
@@ -105,6 +115,7 @@ export default function CalendarPage({ darkMode, setDarkMode }) {
 
     // Navigation handlers
     const goToPrevMonth = () => {
+        setMonthDirection('backward');
         if (currentMonth === 0) {
             setCurrentYear((y) => y - 1);
             setCurrentMonth(11);
@@ -114,6 +125,7 @@ export default function CalendarPage({ darkMode, setDarkMode }) {
     };
 
     const goToNextMonth = () => {
+        setMonthDirection('forward');
         if (currentMonth === 11) {
             setCurrentYear((y) => y + 1);
             setCurrentMonth(0);
@@ -124,6 +136,7 @@ export default function CalendarPage({ darkMode, setDarkMode }) {
 
     const goToToday = () => {
         const now = new Date();
+        setMonthDirection(now.getTime() < new Date(currentYear, currentMonth, 1).getTime() ? 'backward' : 'forward');
         setCurrentYear(now.getFullYear());
         setCurrentMonth(now.getMonth());
         setSelectedDate(formatDateKey(now.getFullYear(), now.getMonth(), now.getDate()));
@@ -154,17 +167,18 @@ export default function CalendarPage({ darkMode, setDarkMode }) {
         sessions.forEach((s) => {
             // Guard: Multi-day historical aggregates must never interpolate fake daily cells
             if (s.isDailySession === false) return;
+            if (/^bookmory_/i.test(s.id || "") || s.source === "bookmory") return;
 
             // Localized date extraction with timezone support (DATA-04).
             // Retained reference for legacy assertion compatibility: s.startedAt ? s.startedAt.split('T')[0] : s.date
-            const dateStr = toLocalDateKey(s.startedAt || s.date);
+            const dateStr = toLocalDateKey(s.date || s.startedAt);
             if (!dateStr) return;
 
-            const mediaId = s.mediaId || s.bookId || s.gameId;
+            const mediaId = s.libraryItemId || s.itemId || s.mediaId || s.bookId || s.gameId;
             const bookItem = bookMap.get(String(mediaId));
             const gameItem = gameMap.get(String(mediaId));
 
-            const isBook = Boolean(bookItem || s.fromPage !== undefined || s.pagesRead !== undefined);
+            const isBook = s.mediaType ? s.mediaType === 'book' : Boolean(bookItem || s.fromPage !== undefined || s.pagesRead !== undefined);
             const mediaType = isBook ? 'book' : 'game';
 
             if (mediaFilter === 'books' && mediaType !== 'book') return;
@@ -176,6 +190,10 @@ export default function CalendarPage({ darkMode, setDarkMode }) {
 
             const enrichedSession = {
                 ...s,
+                // Normalize canonical page and duration keys for existing calendar UI.
+                fromPage: s.fromPage ?? s.startPage,
+                toPage: s.toPage ?? s.endPage,
+                minutes: s.minutes ?? (s.activeSeconds === undefined ? 0 : Number(s.activeSeconds) / 60),
                 mediaType,
                 itemTitle,
                 itemCover,
@@ -219,19 +237,12 @@ export default function CalendarPage({ darkMode, setDarkMode }) {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                 <div>
                     <div className="flex items-center gap-3">
-                        <h1 className="text-2xl font-bold font-display text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                            <BsCalendar3 className="w-6 h-6 text-emerald-500" />
-                            Activity Calendar
-                        </h1>
-                        {sessionMetadata?.hasPendingWrites ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full" title="Changes queued offline; will sync when reconnected">
-                                <BsCloudArrowUp className="w-3 h-3 animate-pulse" /> Syncing offline...
-                            </span>
-                        ) : (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full" title="Real-time cloud sync active">
-                                <BsCloudCheck className="w-3 h-3" /> Live Sync
-                            </span>
-                        )}
+                        <h2 className="sr-only">Browse recorded activity</h2>
+                        {sessionError ? (
+                            <span role="alert" className="text-xs text-red-600 dark:text-red-400">Sessions unavailable: {sessionError.code || sessionError.message}</span>
+                        ) : sessionMetadata?.hasPendingWrites ? (
+                            <span className="text-xs text-amber-700 dark:text-amber-300" role="status"><BsCloudArrowUp className="inline-block mr-1" />Unsynced changes</span>
+                        ) : null}
                     </div>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                         Daily reading and gaming sessions organized by local calendar date.
@@ -278,8 +289,61 @@ export default function CalendarPage({ darkMode, setDarkMode }) {
                 </div>
             </div>
 
+            <div className="mb-4 flex justify-end">
+                <button type="button" onClick={() => { setExportOpen(o => !o); setExportNotice(''); setExportError(''); }} className="diary-press min-h-11 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white" aria-expanded={exportOpen} aria-controls="calendar-export-panel">{exportOpen ? 'Hide export options' : 'Export calendar PNG'}</button>
+            </div>
+            {exportOpen && <section id="calendar-export-panel" className="mb-5 space-y-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900" aria-label="Calendar export settings">
+                <div>
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Save your activity calendar</h3>
+                    <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">Create a high-resolution PNG with your book and game covers.</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <div><p className="mb-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300">Image size</p>
+                        <DiarySelect label="Calendar image size" value={exportRatio} onChange={setExportRatio} options={[{value:'1:1',label:'Square · 1080 × 1080'},{value:'4:5',label:'Portrait · 1080 × 1350'},{value:'9:16',label:'Story · 1080 × 1920'}]}/>
+                    </div>
+                    <div><p className="mb-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300">Background</p>
+                        <DiarySelect label="Calendar theme" value={exportBackground} onChange={setExportBackground} options={[{value:'midnight',label:'Midnight editorial'},{value:'sunset',label:'Golden-hour sunset'},{value:'editorial',label:'Minimal warm paper'},{value:'lilac',label:'Dreamy lilac'}]}/>
+                    </div>
+                </div>
+                <div className="calendar-share-preview" data-theme={exportBackground} style={exportPhoto ? {backgroundImage:`linear-gradient(135deg,rgba(9,18,39,.72),rgba(9,18,39,.65)),url(${exportPhoto})`,backgroundSize:'cover',backgroundPosition:'center'} : undefined}>
+                    <p className="calendar-share-eyebrow">MY DIARY / YOUR MONTH IN STORIES</p>
+                    <p className="calendar-share-heading">{monthName}</p>
+                    <p className="calendar-share-subtitle">A little reading. A little gaming. A lot of memories.</p>
+                    <div className="calendar-share-sample"><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span><span>SUN</span></div>
+                    <p className="calendar-share-hint">Full-size export includes dated cover thumbnails and activity counts.</p>
+                </div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300">Optional background photo
+                    <input type="file" accept="image/jpeg,image/png,image/webp" className="mt-2 block w-full text-xs" onChange={async (event) => {
+                        const file = event.target.files?.[0];
+                        if (!file) { setExportPhoto(null); return; }
+                        if (file.size > 6 * 1024 * 1024) { setExportError('Choose a photo smaller than 6 MB.'); return; }
+                        if (!['image/jpeg','image/png','image/webp'].includes(file.type)) { setExportError('Please select a JPG, PNG or WebP photo.'); return; }
+                        try {
+                            const data = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload=()=>resolve(String(reader.result)); reader.onerror=()=>reject(new Error('Unable to read background photo')); reader.readAsDataURL(file); });
+                            setExportPhoto(data); setExportError('');
+                        } catch (error) { setExportError(error.message); }
+                    }}/>
+                    {exportPhoto && <button type="button" className="mt-2 text-sky-600 underline" onClick={()=>setExportPhoto(null)}>Remove photo</button>}
+                </label>
+                <div><p className="mb-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300">Save to</p>
+                    <DiarySelect label="PNG destination" value={exportDestination} onChange={setExportDestination} options={[{value:'downloads',label:'Downloads / MyDiary'},{value:'gallery',label:'Gallery / Pictures / MyDiary'},{value:'share',label:'Share / Save As…'}]}/>
+                </div>
+                <p className="text-xs leading-5 text-gray-500 dark:text-gray-400">Android: saves to Documents/MyDiary when permitted; otherwise opens the device's Save/Share chooser. Personal notes and app controls are excluded. Some external covers may be unavailable.</p>
+                {exportError && <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300">{exportError}</p>}
+                {exportNotice && <p role="status" className="rounded-xl bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:bg-sky-950/40 dark:text-sky-200">{exportNotice}</p>}
+                <button type="button" disabled={exporting} onClick={async () => {
+                    if (exporting) return;
+                    setExportError(''); setExportNotice(''); setExporting(true);
+                    try {
+                        const result = await exportCalendarPng({year:currentYear,month:currentMonth,sessionsByDate,ratio:exportRatio,background:exportBackground,photoDataUrl:exportPhoto,destination:exportDestination});
+                        setExportNotice(result?.message || 'PNG prepared.');
+                    } catch (e) {
+                        setExportError(e?.message || 'Could not export the calendar. Please try again.');
+                    } finally { setExporting(false); }
+                }} className="diary-press min-h-11 w-full rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{exporting ? 'Preparing PNG…' : 'Download PNG'}</button>
+            </section>}
             {/* Calendar Controls */}
-            <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-sm mb-6">
+            <div className="bg-white dark:bg-gray-900 rounded-3xl p-3 sm:p-6 border border-gray-200 dark:border-gray-800 shadow-sm mb-6">
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-bold font-display text-gray-900 dark:text-gray-100">
                         {monthName}
@@ -297,7 +361,7 @@ export default function CalendarPage({ darkMode, setDarkMode }) {
                                 type="button"
                                 aria-label="Previous month"
                                 onClick={goToPrevMonth}
-                                className="p-2 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors"
+                                className="diary-press min-w-11 min-h-11 inline-flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors"
                             >
                                 <BsChevronLeft className="w-4 h-4" />
                             </button>
@@ -305,7 +369,7 @@ export default function CalendarPage({ darkMode, setDarkMode }) {
                                 type="button"
                                 aria-label="Next month"
                                 onClick={goToNextMonth}
-                                className="p-2 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors"
+                                className="diary-press min-w-11 min-h-11 inline-flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors"
                             >
                                 <BsChevronRight className="w-4 h-4" />
                             </button>
@@ -326,12 +390,12 @@ export default function CalendarPage({ darkMode, setDarkMode }) {
                 </div>
 
                 {/* Calendar Month Grid */}
-                <div className="grid grid-cols-7 gap-2">
+                <div className={`diary-month-enter diary-month-${monthDirection} grid grid-cols-7 gap-2`} key={`${currentYear}-${currentMonth}`}>
                     {/* Empty padding cells before first day */}
                     {Array.from({ length: firstDayIndex }).map((_, i) => (
                         <div
                             key={`empty-${i}`}
-                            className="min-h-[88px] sm:min-h-[104px] rounded-2xl bg-gray-50/50 dark:bg-gray-900/40 border border-transparent opacity-30"
+                            className="min-h-[74px] sm:min-h-[104px] rounded-2xl bg-gray-50/50 dark:bg-gray-900/40 border border-transparent opacity-30"
                         />
                     ))}
 
@@ -349,13 +413,16 @@ export default function CalendarPage({ darkMode, setDarkMode }) {
                                 key={dateKey}
                                 onClick={() => setSelectedDate(dateKey)}
                                 role="button"
+                                aria-label={`${dateKey}: ${daySessions.length} recorded ${daySessions.length === 1 ? 'session' : 'sessions'}`}
+                                aria-pressed={isSelected}
                                 tabIndex={0}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
                                         setSelectedDate(dateKey);
                                     }
                                 }}
-                                className={`min-h-[88px] sm:min-h-[104px] rounded-2xl p-1.5 sm:p-2 border transition-all cursor-pointer flex flex-col justify-between ${
+                                className={`min-h-[74px] sm:min-h-[104px] rounded-2xl p-1.5 sm:p-2 border transition-colors diary-calendar-cell cursor-pointer flex flex-col justify-between ${
                                     isSelected
                                         ? 'border-emerald-500 ring-2 ring-emerald-500/30 bg-emerald-50/20 dark:bg-emerald-950/20 shadow-sm'
                                         : isToday
@@ -387,14 +454,15 @@ export default function CalendarPage({ darkMode, setDarkMode }) {
                                     {daySessions.slice(0, 2).map((s, idx) => (
                                         <div
                                             key={`${s.id || idx}`}
-                                            className="w-6 h-8 sm:w-7 sm:h-10 rounded-md overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shrink-0 relative group"
+                                            className="w-7 h-10 sm:w-9 sm:h-12 rounded-md overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shrink-0 relative group"
                                             title={s.itemTitle}
                                         >
                                             {s.itemCover ? (
                                                 <img
                                                     src={s.itemCover}
                                                     alt={s.itemTitle}
-                                                    className="w-full h-full object-cover"
+                                                    className="w-full h-full object-contain"
+                                                    loading="lazy" decoding="async"
                                                 />
                                             ) : s.mediaType === 'book' ? (
                                                 <div className="w-full h-full flex items-center justify-center text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40">
@@ -427,7 +495,7 @@ export default function CalendarPage({ darkMode, setDarkMode }) {
                     onClick={() => setSelectedDate(null)}
                 >
                     <div
-                        className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
+                        className="diary-modal-enter w-full max-w-lg bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Drawer Header */}

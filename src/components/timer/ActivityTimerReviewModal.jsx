@@ -1,311 +1,159 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import { useTimer } from '../../context/TimerContext';
+import { getCurrentLocalDateKey } from '../../domain/dates';
+import { formatClock } from '../../hooks/useElapsedDisplay';
 import {
-    BsClock,
-    BsBook,
-    BsController,
-    BsCheck2Circle,
-    BsX,
-    BsTrash3,
-    BsArrowCounterclockwise,
-    BsExclamationTriangle,
+    BsBook, BsController, BsCheck2, BsArrowLeft, BsTrash3,
+    BsArrowCounterclockwise, BsExclamationTriangle, BsKeyboard, BsPlus, BsDash,
 } from 'react-icons/bs';
 
-function formatDuration(totalSeconds) {
-    const s = Math.max(0, Math.floor(totalSeconds));
-    const hours = Math.floor(s / 3600);
-    const minutes = Math.floor((s % 3600) / 60);
-    const seconds = s % 60;
-    const pad = (n) => String(n).padStart(2, '0');
-    if (hours > 0) {
-        return `${hours}h ${pad(minutes)}m ${pad(seconds)}s`;
-    }
-    return `${pad(minutes)}m ${pad(seconds)}s`;
+function getStoredDraft(timer) {
+    try {
+        const stored = JSON.parse(sessionStorage.getItem(`diary-session-draft-${timer.sessionId}`) || 'null');
+        return stored && stored.timerId === timer.timerId ? stored : null;
+    } catch { return null; }
 }
 
 function ReviewForm({ activeTimer, cancelReview, saveSession, discardTimer }) {
     const isBook = activeTimer.mediaType === 'book';
     const isSaving = activeTimer.state === 'saving';
-    const totalActiveSeconds = Math.max(0, Math.floor((activeTimer.accumulatedActiveMs || 0) / 1000));
-
-    const initialPage = Number(activeTimer.fromPage) || 0;
-    const [startPage, setStartPage] = useState(initialPage);
-    const [endPage, setEndPage] = useState(initialPage);
-    const [notes, setNotes] = useState('');
+    const duration = Math.max(0, Math.floor((Number(activeTimer.accumulatedActiveMs) || 0) / 1000));
+    const originalPage = Math.max(0, Number(activeTimer.fromPage) || 0);
+    const totalPages = Number(activeTimer.totalPages) > 0 ? Number(activeTimer.totalPages) : null;
+    const draft = getStoredDraft(activeTimer);
+    const [startPage, setStartPage] = useState(draft?.startPage ?? originalPage);
+    const [endPage, setEndPage] = useState(draft?.endPage ?? originalPage);
+    const [notes, setNotes] = useState(draft?.notes ?? '');
+    const [keyboardMode, setKeyboardMode] = useState(false);
     const [errorMsg, setErrorMsg] = useState(activeTimer.saveError || '');
     const [confirmDiscard, setConfirmDiscard] = useState(false);
+    const start = Number(startPage);
+    const end = Number(endPage);
+    const validRange = Number.isInteger(start) && Number.isInteger(end) && start >= 0 && end >= start && (totalPages === null || end <= totalPages);
+    const pagesRead = validRange ? end - start : 0;
 
-    const pagesRead = Math.max(0, Number(endPage || 0) - Number(startPage || 0));
+    const persistDraft = (next) => {
+        try {
+            sessionStorage.setItem(`diary-session-draft-${activeTimer.sessionId}`, JSON.stringify({
+                timerId: activeTimer.timerId,
+                startPage: next.startPage ?? startPage,
+                endPage: next.endPage ?? endPage,
+                notes: next.notes ?? notes,
+            }));
+        } catch { /* WebView private mode may block session storage. */ }
+    };
+    const changeStart = (value) => { setStartPage(value); persistDraft({ startPage: value }); };
+    const changeEnd = (value) => { setEndPage(value); persistDraft({ endPage: value }); };
+    const changeNotes = (value) => { setNotes(value); persistDraft({ notes: value }); };
+    const adjustEnd = (step) => changeEnd(Math.max(start, Math.min(totalPages ?? Number.MAX_SAFE_INTEGER, (Number(endPage) || 0) + step)));
 
-    const handleSave = async (e) => {
-        e.preventDefault();
-        setErrorMsg('');
-
-        if (isBook && Number(endPage) < Number(startPage)) {
-            setErrorMsg('Ending page cannot be less than starting page.');
+    const handleSave = async (event) => {
+        event.preventDefault();
+        if (isSaving) return;
+        if (isBook && !validRange) {
+            setErrorMsg(totalPages === null ? 'Enter a valid page range.' : `Pages must be between ${start} and ${totalPages}.`);
             return;
         }
-
+        setErrorMsg('');
         try {
-            await saveSession({
-                activeSeconds: totalActiveSeconds,
-                startPage: Number(startPage),
-                endPage: Number(endPage),
-                pagesRead,
+            const result = await saveSession({
+                startPage: start,
+                endPage: end,
                 notes,
-                date: new Date().toISOString().slice(0, 10),
-                timezone: 'Asia/Manila',
+                date: getCurrentLocalDateKey(),
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Manila',
             });
+            if (result?.success) sessionStorage.removeItem(`diary-session-draft-${activeTimer.sessionId}`);
         } catch (err) {
-            setErrorMsg(err.message || 'Failed to save session. Your review draft is preserved.');
+            setErrorMsg(err?.message || 'Session could not be saved. Your draft is still here.');
         }
     };
 
     return (
-        <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Activity Session Review"
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
-        >
-            <div
-                className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto animate-scale-up"
-                onClick={(e) => e.stopPropagation()}
-            >
-                {/* Header */}
-                <div className="flex items-center justify-between pb-4 border-b border-border/50 dark:border-gray-800">
-                    <div className="flex items-center gap-2">
-                        <span className="p-1.5 rounded-lg bg-primary/10 dark:bg-emerald-950/50 text-primary dark:text-emerald-400">
-                            {isBook ? <BsBook className="w-4 h-4" /> : <BsController className="w-4 h-4" />}
-                        </span>
-                        <div>
-                            <h2 className="text-sm font-bold text-primary dark:text-gray-100">
-                                Review {isBook ? 'Reading' : 'Gaming'} Session
-                            </h2>
-                            <p className="text-[11px] text-secondary dark:text-gray-400">
-                                Monotonically tracked duration (pauses excluded)
-                            </p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={cancelReview}
-                        disabled={isSaving}
-                        className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-secondary dark:text-gray-400 cursor-pointer transition-colors"
-                        aria-label="Close and resume later"
-                        title="Resume / Keep timer"
-                    >
-                        <BsX className="w-5 h-5" />
-                    </button>
+        <section role="dialog" aria-modal="true" aria-labelledby="session-review-title"
+            className="diary-review-entrance fixed inset-0 z-[70] bg-[#f8f0e5] dark:bg-[#111827] text-[#433d36] dark:text-gray-100 overflow-y-auto"
+            style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+            <div className="min-h-full max-w-xl mx-auto flex flex-col px-5 pt-5 pb-5">
+                <div className="flex items-center justify-between gap-3">
+                    <button type="button" disabled={isSaving} onClick={cancelReview} aria-label="Back to timer" className="min-w-11 min-h-11 rounded-xl flex items-center gap-2 text-sm font-semibold disabled:opacity-50"><BsArrowLeft /> Back</button>
+                    <button form="diary-save-session-form" type="submit" disabled={isSaving || (isBook && !validRange)} className="min-h-11 rounded-full bg-white/80 dark:bg-slate-800 px-4 text-sm font-bold flex items-center gap-2 disabled:opacity-50"><BsCheck2 /> Save</button>
                 </div>
-
-                {/* Item Thumbnail & Measured Duration */}
-                <div className="mt-4 p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-border/40 dark:border-gray-800 flex items-center gap-3">
-                    <div className="w-12 h-16 rounded-lg bg-gray-200 dark:bg-gray-700 overflow-hidden shrink-0 flex items-center justify-center">
-                        {activeTimer.itemCover ? (
-                            <img src={activeTimer.itemCover} alt={activeTimer.itemTitle} className="w-full h-full object-cover" />
-                        ) : (
-                            <BsClock className="w-5 h-5 text-gray-400" />
-                        )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-primary dark:text-gray-100 truncate">
-                            {activeTimer.itemTitle}
-                        </p>
-                        <div className="flex items-baseline gap-2 mt-1">
-                            <span className="text-lg font-mono font-extrabold text-primary dark:text-emerald-400">
-                                {formatDuration(totalActiveSeconds)}
-                            </span>
-                            <span className="text-[10px] uppercase font-semibold text-secondary dark:text-gray-400">
-                                Active Time
-                            </span>
-                        </div>
-                    </div>
+                <h1 id="session-review-title" className="font-display text-2xl sm:text-3xl font-bold mt-9">Save {isBook ? 'reading' : 'gaming'} session</h1>
+                <p className="text-sm text-[#82796f] dark:text-slate-400 mt-2">Check your activity before adding it to your diary.</p>
+                <p className="text-xs mt-5 text-[#82796f] dark:text-slate-400">{getCurrentLocalDateKey()}</p>
+                <div className="grid grid-cols-2 gap-3 mt-4">
+                    <div className="rounded-2xl p-4 bg-white/80 dark:bg-slate-800"><p className="text-xs opacity-70">Active time</p><p className="text-xl font-bold text-[#407da5] dark:text-sky-300 tabular-nums mt-2">{formatClock(duration)}</p></div>
+                    <div className="rounded-2xl p-4 bg-white/80 dark:bg-slate-800"><p className="text-xs opacity-70">{isBook ? 'Pages read' : 'Activity'}</p><p className="text-xl font-bold text-[#407da5] dark:text-sky-300 mt-2">{isBook ? pagesRead : 'Gaming'}</p></div>
                 </div>
-
-                {/* Form Inputs */}
-                <form onSubmit={handleSave} className="mt-4 flex flex-col gap-4">
+                <form id="diary-save-session-form" onSubmit={handleSave} className="flex-1 flex flex-col">
                     {isBook && (
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="block text-xs font-medium text-secondary dark:text-gray-300 mb-1">
-                                    Start Page
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={startPage}
-                                    onChange={(e) => setStartPage(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-xl border border-border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-primary dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                />
+                        <div className="mt-8 rounded-3xl bg-white/80 dark:bg-slate-800 p-5">
+                            <h2 className="text-lg font-bold">How much did you read?</h2>
+                            <p className="text-xs opacity-70 mt-1">Choose your last page to save your progress.</p>
+                            <div className="flex justify-between items-center mt-4">
+                                <span className="text-xs">Started at page {startPage}</span>
+                                <button type="button" onClick={() => setKeyboardMode((v) => !v)} className="text-xs underline underline-offset-4 inline-flex items-center gap-1 min-h-10"><BsKeyboard /> {keyboardMode ? 'Use stepper' : 'Use keyboard'}</button>
                             </div>
-                            <div>
-                                <label className="block text-xs font-medium text-secondary dark:text-gray-300 mb-1">
-                                    End Page
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={endPage}
-                                    onChange={(e) => setEndPage(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-xl border border-border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-primary dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                />
-                            </div>
-                            <div className="col-span-2 text-right">
-                                <span className="text-xs font-semibold text-secondary dark:text-gray-400">
-                                    Pages Read: <strong className="text-primary dark:text-emerald-400">{pagesRead}</strong>
-                                </span>
-                            </div>
-                        </div>
-                    )}
-
-                    <div>
-                        <label className="block text-xs font-medium text-secondary dark:text-gray-300 mb-1">
-                            {isBook ? 'Reflection / Reading Notes (Private)' : 'Session Notes / Milestone (Private)'}
-                        </label>
-                        <textarea
-                            rows={3}
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            placeholder={isBook ? 'Thoughts, favorite lines, key takeaways...' : 'Boss defeated, chapter completed, reflections...'}
-                            className="w-full px-3 py-2 rounded-xl border border-border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-primary dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
-                        />
-                    </div>
-
-                    {errorMsg && (
-                        <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 text-xs text-red-600 dark:text-red-400">
-                            {errorMsg}
-                        </div>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="mt-2 flex flex-col gap-2">
-                        <button
-                            type="submit"
-                            disabled={isSaving}
-                            className="w-full py-3 rounded-xl bg-primary dark:bg-emerald-500 text-white dark:text-gray-950 text-xs font-bold flex items-center justify-center gap-2 shadow-md hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
-                        >
-                            <BsCheck2Circle className="w-4 h-4" />
-                            <span>{isSaving ? 'Saving Session...' : 'Save Session to Diary'}</span>
-                        </button>
-
-                        <div className="flex items-center justify-between gap-2 pt-2">
-                            <button
-                                type="button"
-                                onClick={cancelReview}
-                                disabled={isSaving}
-                                className="flex-1 py-2 rounded-xl border border-border dark:border-gray-700 text-secondary dark:text-gray-300 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-center gap-1.5 cursor-pointer"
-                            >
-                                <BsArrowCounterclockwise className="w-3.5 h-3.5" />
-                                <span>Resume Timer</span>
-                            </button>
-
-                            {confirmDiscard ? (
-                                <button
-                                    type="button"
-                                    onClick={discardTimer}
-                                    disabled={isSaving}
-                                    className="flex-1 py-2 rounded-xl bg-red-600 text-white text-xs font-semibold hover:bg-red-700 flex items-center justify-center gap-1.5 cursor-pointer"
-                                >
-                                    <span>Confirm Discard</span>
-                                </button>
+                            {keyboardMode ? (
+                                <div className="mt-3 grid grid-cols-2 gap-3">
+                                    <label className="text-xs">Start page<input aria-label="Start page" type="number" inputMode="numeric" min="0" max={totalPages ?? undefined} value={startPage} onChange={(e) => changeStart(e.target.value)} className="block w-full mt-2 py-3 px-3 text-base bg-[#f8f0e5] dark:bg-gray-900 rounded-xl" /></label>
+                                    <label className="text-xs">End page<input aria-label="End page" type="number" inputMode="numeric" min={startPage} max={totalPages ?? undefined} value={endPage} onChange={(e) => changeEnd(e.target.value)} className="block w-full mt-2 py-3 px-3 text-base bg-[#f8f0e5] dark:bg-gray-900 rounded-xl" /></label>
+                                </div>
                             ) : (
-                                <button
-                                    type="button"
-                                    onClick={() => setConfirmDiscard(true)}
-                                    disabled={isSaving}
-                                    className="flex-1 py-2 rounded-xl text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center justify-center gap-1.5 cursor-pointer"
-                                >
-                                    <BsTrash3 className="w-3.5 h-3.5" />
-                                    <span>Discard</span>
-                                </button>
+                                <div className="diary-page-selector mt-4 flex items-center gap-3 justify-center">
+                                    <button type="button" onClick={() => adjustEnd(-1)} aria-label="One page less" className="min-w-12 min-h-12 rounded-full bg-[#e8e0d5] dark:bg-slate-700 flex items-center justify-center"><BsDash /></button>
+                                    <div className="flex-1 text-center py-3 bg-[#f8f0e5] dark:bg-gray-900 rounded-2xl"><p className="text-xs opacity-60">End page</p><p className="font-display text-3xl font-bold tabular-nums">{endPage}</p>{totalPages && <p className="text-xs opacity-60">of {totalPages}</p>}</div>
+                                    <button type="button" onClick={() => adjustEnd(1)} aria-label="One page more" className="min-w-12 min-h-12 rounded-full bg-[#407da5] text-white flex items-center justify-center"><BsPlus /></button>
+                                </div>
                             )}
+                            <div className="flex items-center justify-center gap-3 mt-4">
+                                <button type="button" onClick={() => adjustEnd(-10)} className="rounded-full px-4 min-h-10 bg-[#f1e9df] dark:bg-gray-700 text-xs">−10 pages</button>
+                                <button type="button" onClick={() => adjustEnd(10)} className="rounded-full px-4 min-h-10 bg-[#f1e9df] dark:bg-gray-700 text-xs">+10 pages</button>
+                            </div>
+                        </div>
+                    )}
+                    <div className="mt-5">
+                        <label htmlFor="session-reflection" className="block text-xs font-semibold mb-2">{isBook ? 'Reading notes (private, optional)' : 'Gaming notes (private, optional)'}</label>
+                        <textarea id="session-reflection" value={notes} onChange={(e) => changeNotes(e.target.value)} rows="3" placeholder="A thought worth remembering…" className="w-full resize-y rounded-2xl p-4 text-sm bg-white dark:bg-slate-800 border border-[#e5dacf] dark:border-gray-700" />
+                    </div>
+                    {errorMsg && <p className="mt-4 p-3 rounded-xl bg-red-100 dark:bg-red-950/40 text-sm text-red-700 dark:text-red-300" role="alert">{errorMsg}</p>}
+                    <div className="mt-auto pt-6 space-y-3">
+                        <button type="submit" disabled={isSaving || (isBook && !validRange)} className="w-full min-h-14 bg-[#407da5] hover:bg-[#346c92] text-white font-bold rounded-2xl flex items-center justify-center gap-2 disabled:opacity-50"><BsCheck2 className="text-lg" /> {isSaving ? 'Saving session…' : 'Save session'}</button>
+                        <div className="grid grid-cols-2 gap-3">
+                            <button type="button" disabled={isSaving} onClick={cancelReview} className="rounded-xl min-h-11 text-sm font-semibold flex justify-center gap-2 items-center bg-white/80 dark:bg-gray-800"><BsArrowCounterclockwise /> Resume timer</button>
+                            {confirmDiscard ? <button type="button" disabled={isSaving} onClick={() => { sessionStorage.removeItem(`diary-session-draft-${activeTimer.sessionId}`); discardTimer(); }} className="rounded-xl min-h-11 text-sm font-semibold bg-red-600 text-white">Confirm discard</button>
+                                : <button type="button" disabled={isSaving} onClick={() => setConfirmDiscard(true)} className="rounded-xl min-h-11 text-sm font-semibold flex justify-center gap-2 items-center text-red-700 dark:text-red-300"><BsTrash3 /> Discard</button>}
                         </div>
                     </div>
                 </form>
             </div>
-        </div>
+        </section>
     );
 }
 
 ReviewForm.propTypes = {
-    activeTimer: PropTypes.shape({
-        timerId: PropTypes.string,
-        sessionId: PropTypes.string,
-        mediaType: PropTypes.string,
-        state: PropTypes.string,
-        accumulatedActiveMs: PropTypes.number,
-        fromPage: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
-        itemCover: PropTypes.string,
-        itemTitle: PropTypes.string,
-        saveError: PropTypes.string,
-    }).isRequired,
+    activeTimer: PropTypes.object.isRequired,
     cancelReview: PropTypes.func.isRequired,
     saveSession: PropTypes.func.isRequired,
     discardTimer: PropTypes.func.isRequired,
 };
 
 export default function ActivityTimerReviewModal() {
-    const {
-        activeTimer,
-        isModalOpen,
-        timerConflict,
-        resolveConflict,
-        cancelReview,
-        saveSession,
-        discardTimer,
-    } = useTimer();
-
-    // Handle conflict dialog if another timer is triggered while one is active
+    const { activeTimer, isModalOpen, timerConflict, resolveConflict, cancelReview, saveSession, discardTimer } = useTimer();
     if (timerConflict) {
         return (
-            <div
-                role="dialog"
-                aria-modal="true"
-                aria-label="Timer Conflict Warning"
-                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
-            >
-                <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-3xl p-6 border border-amber-300 dark:border-amber-700/50 shadow-2xl animate-scale-up text-center">
-                    <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                        <BsExclamationTriangle className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-base font-bold text-primary dark:text-gray-100">
-                        Timer Already Active
-                    </h3>
-                    <p className="text-xs text-secondary dark:text-gray-300 mt-2">
-                        A timer is already active for <strong className="text-primary dark:text-gray-100">{timerConflict.current?.itemTitle}</strong>.
-                        Would you like to keep the active timer or replace it?
-                    </p>
-                    <div className="mt-6 flex flex-col gap-2">
-                        <button
-                            onClick={() => resolveConflict('keep')}
-                            className="w-full py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-primary dark:text-gray-200 text-xs font-semibold hover:bg-gray-200 cursor-pointer"
-                        >
-                            Keep Active Timer
-                        </button>
-                        <button
-                            onClick={() => resolveConflict('replace')}
-                            className="w-full py-2.5 rounded-xl bg-red-600 text-white text-xs font-semibold hover:bg-red-700 cursor-pointer"
-                        >
-                            Replace and Start New Timer
-                        </button>
-                    </div>
+            <section role="dialog" aria-modal="true" aria-label="Active timer conflict" className="fixed inset-0 z-[90] bg-black/60 flex justify-center items-center p-4">
+                <div className="w-full max-w-sm rounded-3xl bg-white dark:bg-gray-900 shadow-2xl p-6 text-center">
+                    <BsExclamationTriangle className="text-amber-500 text-3xl mx-auto mb-3" />
+                    <h2 className="font-bold text-lg mb-3">A timer is already active</h2>
+                    <p className="text-sm mb-6 text-gray-600 dark:text-gray-300">You have an active session for <strong>{timerConflict.current?.itemTitle}</strong>. Replacing it will discard unsaved time.</p>
+                    <button type="button" onClick={() => resolveConflict('keep')} className="w-full min-h-11 rounded-xl bg-gray-100 dark:bg-gray-800 mb-3">Keep existing session</button>
+                    <button type="button" onClick={() => resolveConflict('replace')} className="w-full min-h-11 rounded-xl bg-red-600 text-white">Discard it and start another</button>
                 </div>
-            </div>
+            </section>
         );
     }
-
-    if (!activeTimer || (activeTimer.state !== 'review' && activeTimer.state !== 'saving') || !isModalOpen) {
-        return null;
-    }
-
-    return (
-        <ReviewForm
-            key={activeTimer.timerId || activeTimer.sessionId || 'review-form'}
-            activeTimer={activeTimer}
-            cancelReview={cancelReview}
-            saveSession={saveSession}
-            discardTimer={discardTimer}
-        />
-    );
+    if (!activeTimer || !['review', 'saving'].includes(activeTimer.state) || !isModalOpen) return null;
+    return <ReviewForm key={activeTimer.sessionId || activeTimer.timerId} activeTimer={activeTimer} cancelReview={cancelReview} saveSession={saveSession} discardTimer={discardTimer} />;
 }

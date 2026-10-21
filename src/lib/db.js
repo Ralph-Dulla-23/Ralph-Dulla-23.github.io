@@ -12,9 +12,11 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { OWNER_UID } from './config.js';
+import { reportFirestoreError } from './permissionDiagnostics.js';
 import fallbackBooks from '../data/books.js';
 import { createDiaryRepository } from '../domain/repository/diaryRepository.js';
 import { toPublicShelfItem, toPublicHighlight } from '../domain/publicProjection.js';
+import { queuePublishedItemRefresh, flushPublishedItemRefreshes } from '../services/publishedItemSync.js';
 
 export { createDiaryRepository };
 
@@ -22,7 +24,8 @@ export { createDiaryRepository };
  * Returns a canonical v2 DiaryRepository bound to the verified owner UID.
  */
 export function getDiaryRepository(uid) {
-    return createDiaryRepository({ db, uid: uid || OWNER_UID });
+    if (!db) throw new Error('Firebase is not configured; cannot access cloud diary records.');
+    return createDiaryRepository({ db, uid });
 }
 
 /* =========================================================================
@@ -44,6 +47,95 @@ const bookSubscribers = new Set();
 const journalSubscribers = new Set();
 const publicShelfSubscribers = new Set();
 const publicHighlightsSubscribers = new Set();
+// Reuse owner-only snapshots between diary routes; listener churn otherwise
+// causes repeated book/game downloads and card-loading flashes.
+const privateMediaFeeds = { book: new Map(), game: new Map() };
+const PRIVATE_FEED_IDLE_MS = 12_000;
+
+function subscribePrivateMedia(kind, ownerUid, onUpdate) {
+    const safeUid = sanitizeId(ownerUid || OWNER_UID || 'owner', 'user');
+    const pools = privateMediaFeeds[kind];
+    const subscriberSet = kind === 'book' ? bookSubscribers : gameSubscribers;
+    const build = kind === 'book' ? buildMergedBooks : buildMergedGames;
+    let pool = pools.get(safeUid);
+    if (!pool) {
+        pool = { callbacks: new Set(), cloud: [], unsub: null, idleTimer: null, disposed: false };
+        pool.emit = () => {
+            if (pool.disposed) return;
+            const items = build(pool.cloud);
+            pool.callbacks.forEach((callback) => callback(items));
+        };
+        pool.dispose = () => {
+            if (pool.disposed) return;
+            pool.disposed = true;
+            if (pool.idleTimer) clearTimeout(pool.idleTimer);
+            pool.unsub?.();
+            subscriberSet.delete(pool.emit);
+            pool.callbacks.clear();
+            if (pools.get(safeUid) === pool) pools.delete(safeUid);
+        };
+        pools.set(safeUid, pool);
+        subscriberSet.add(pool.emit);
+        if (db && ownerUid) {
+            pool.unsub = onSnapshot(
+                collection(db, 'users', safeUid, kind === 'book' ? 'books' : 'games'),
+                (snapshot) => {
+                    if (pool.disposed) return;
+                    pool.cloud = snapshot.docs.map((record) => ({ id: record.id, ...record.data() }));
+                    // Firebase can finish a persisted write after the app has restarted.
+                    // On confirmed snapshots, release the local optimistic overlay so
+                    // a newer cloud edit from another device can become authoritative.
+                    const key = kind === 'book' ? LS_BOOKS_KEY : LS_GAMES_KEY;
+                    const local = readJson(key, {});
+                    let changed = false;
+                    snapshot.docs.forEach((record) => {
+                        const id = record.id;
+                        const cached = local[id];
+                        const cloudTimestamp = record.data()?.updatedAt;
+                        const cloudMs = typeof cloudTimestamp?.toMillis === 'function' ? cloudTimestamp.toMillis() : 0;
+                        const savedMs = Date.parse(cached?.updatedAtISO || '') || 0;
+                        if (cached?._syncPending && !record.metadata.hasPendingWrites && cloudMs >= savedMs - 2000) {
+                            local[id] = { ...cached, _syncPending: false };
+                            changed = true;
+                        }
+                    });
+                    if (changed) writeJson(key, local);
+                    pool.emit();
+                },
+                (error) => {
+                    reportFirestoreError(error, `private ${kind}s`);
+                    console.warn(`Firestore ${kind} listener using local fallback:`, error.message);
+                    pool.emit();
+                },
+            );
+        }
+    }
+    if (pool.idleTimer) { clearTimeout(pool.idleTimer); pool.idleTimer = null; }
+    pool.callbacks.add(onUpdate);
+    onUpdate(build(pool.cloud));
+    return () => {
+        if (!pool.callbacks.delete(onUpdate) || pool.disposed) return;
+        if (pool.callbacks.size === 0) {
+            pool.idleTimer = setTimeout(pool.dispose, PRIVATE_FEED_IDLE_MS);
+        }
+    };
+}
+
+function markLocalCloudAcknowledged(storageKey, id, onNotify) {
+    const map = readJson(storageKey, {});
+    if (!map[id]) return;
+    map[id] = { ...map[id], _syncPending: false };
+    writeJson(storageKey, map);
+    onNotify();
+}
+
+export function clearPrivateMediaSubscriptions() {
+    for (const pools of Object.values(privateMediaFeeds)) {
+        for (const pool of pools.values()) pool.dispose();
+        pools.clear();
+    }
+}
+
 
 function notifyGameSubscribers() {
     gameSubscribers.forEach((cb) => {
@@ -172,7 +264,10 @@ function buildMergedGames(cloudGames = []) {
         if (!g) return;
         const id = sanitizeId(g.id || key, 'game');
         if (!deletedIds.has(id)) {
-            mergedMap.set(id, { ...mergedMap.get(id), ...g, id });
+            const fromCloud = mergedMap.get(id);
+            mergedMap.set(id, fromCloud && !g._syncPending
+                ? { ...g, ...fromCloud, id }
+                : { ...fromCloud, ...g, id });
         }
     });
 
@@ -194,14 +289,14 @@ function buildMergedBooks(cloudBooks = []) {
     fallbackBooks.forEach((b, idx) => {
         const id = sanitizeId(b.id || b.coverId || `book-${idx}`, 'book');
         if (!deletedIds.has(id)) {
-            const pages = Number(b.pages) || 350;
+            const pages = Number(b.pages) > 0 ? Number(b.pages) : null;
             const progress = Number(b.progress) || 0;
             const currentPage =
                 b.currentPage !== undefined
                     ? Number(b.currentPage)
                     : progress === 100
-                    ? pages
-                    : Math.round((progress / 100) * pages);
+                    ? (pages ?? 0)
+                    : pages === null ? 0 : Math.round((progress / 100) * pages);
             mergedMap.set(id, {
                 ...b,
                 id,
@@ -224,7 +319,10 @@ function buildMergedBooks(cloudBooks = []) {
         if (!b) return;
         const id = sanitizeId(b.id || key, 'book');
         if (!deletedIds.has(id)) {
-            mergedMap.set(id, { ...mergedMap.get(id), ...b, id });
+            const fromCloud = mergedMap.get(id);
+            mergedMap.set(id, fromCloud && !b._syncPending
+                ? { ...b, ...fromCloud, id }
+                : { ...fromCloud, ...b, id });
         }
     });
 
@@ -256,14 +354,14 @@ function ensureLocalBook(rawBookId) {
     );
 
     if (found) {
-        const totalPages = Number(found.pages) || 350;
+        const totalPages = Number(found.pages) > 0 ? Number(found.pages) : null;
         const progress = Number(found.progress) || 0;
         const currentPage =
             found.currentPage !== undefined
                 ? Number(found.currentPage)
                 : progress === 100
-                ? totalPages
-                : Math.round((progress / 100) * totalPages);
+                ? (totalPages ?? 0)
+                : (totalPages === null ? 0 : Math.round((progress / 100) * totalPages));
         const copied = {
             ...found,
             id: safeBookId,
@@ -283,7 +381,7 @@ function ensureLocalBook(rawBookId) {
         title: 'Untitled Book',
         authors: [],
         author: '',
-        pages: 350,
+        pages: null,
         currentPage: 0,
         progress: 0,
         status: 'reading',
@@ -339,6 +437,7 @@ export async function saveGame(uid, gameData, privateReview = '') {
         ...baseFields,
         createdAtISO: existingLocal.createdAtISO || nowIso,
         updatedAtISO: nowIso,
+        _syncPending: true,
     };
     writeJson(LS_GAMES_KEY, localGames);
 
@@ -348,16 +447,14 @@ export async function saveGame(uid, gameData, privateReview = '') {
 
     unmarkDeletedId(gameId);
     notifyGameSubscribers();
+    // Persist the refresh intent now: Firestore may finish uploading after an app restart.
+    queuePublishedItemRefresh(safeUid, 'game', gameId);
 
-    // 2. Automatically project sanitized public game metadata to public shelf
-    try {
-        await publishLibraryItem(safeUid, { ...baseFields, mediaType: 'game' });
-    } catch (err) {
-        console.warn('Auto-publish to public shelf deferred:', err.message);
-    }
-
-    // 3. Attempt Firestore sync in background-safe try/catch
+    // Public publishing is exclusively opt-in from the media detail screen.
+    // Saving a private game must never publish it automatically.
+    // 2. Attempt Firestore sync in background-safe try/catch
     if (db) {
+        const persist = async () => {
         try {
             const gameRef = doc(db, 'users', safeUid, 'games', gameId);
             const publicDoc = {
@@ -378,8 +475,23 @@ export async function saveGame(uid, gameData, privateReview = '') {
                 },
                 { merge: true }
             );
+            markLocalCloudAcknowledged(LS_GAMES_KEY, gameId, notifyGameSubscribers);
+            queuePublishedItemRefresh(safeUid, 'game', gameId);
+            void flushPublishedItemRefreshes();
         } catch (err) {
+            if (err?.code === 'permission-denied' || err?.code === 'unauthenticated') {
+                reportFirestoreError(err, 'saving private diary data');
+                throw err;
+            }
             console.warn('Firestore sync deferred (saved locally):', err.message);
+        }
+         };
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            // Firestore persistent cache queues the write. Return to the user
+            // immediately rather than waiting indefinitely for server acknowledgement.
+            void persist().catch((error) => reportFirestoreError(error, 'syncing offline diary changes'));
+        } else {
+            await persist();
         }
     }
 
@@ -428,39 +540,7 @@ export async function deleteGame(uid, gameId) {
  * Works signed-out or when Firestore rules reject access by merging local mirror.
  */
 export function watchPublicGames(ownerUid, onUpdate) {
-    let latestCloudGames = [];
-    const emit = () => {
-        onUpdate(buildMergedGames(latestCloudGames));
-    };
-
-    gameSubscribers.add(emit);
-    emit();
-
-    if (!db || !ownerUid) {
-        return () => {
-            gameSubscribers.delete(emit);
-        };
-    }
-
-    const safeOwnerUid = sanitizeId(ownerUid, 'user');
-    const q = collection(db, 'users', safeOwnerUid, 'games');
-
-    const unsubFirestore = onSnapshot(
-        q,
-        (snapshot) => {
-            latestCloudGames = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-            emit();
-        },
-        (error) => {
-            console.warn('Firestore public games listener fallback to local mirror:', error.message);
-            emit();
-        }
-    );
-
-    return () => {
-        gameSubscribers.delete(emit);
-        unsubFirestore();
-    };
+    return subscribePrivateMedia('game', ownerUid, onUpdate);
 }
 
 /**
@@ -514,12 +594,13 @@ export async function getGamePrivateNotes(uid, gameId) {
  * Public metadata goes to users/{uid}/books/{bookId} and local storage mirror.
  * Private notes go to users/{uid}/books/{bookId}/private/notes.
  */
-export async function saveBook(uid, bookData, privateNotes = '') {
+export async function saveBook(uid, bookData, privateNotes) {
     const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
     const bookId = sanitizeId(bookData?.id || bookData?.coverId || Date.now(), 'book');
     const nowIso = new Date().toISOString();
+    const cachedBook = readJson(LS_BOOKS_KEY, {})[bookId] || {};
 
-    const pages = Number(bookData?.pages) || 350;
+    const pages = Number(bookData?.pages) > 0 ? Number(bookData.pages) : null;
     const currentPage = Number(bookData?.currentPage) || 0;
     const progress =
         pages > 0
@@ -549,6 +630,15 @@ export async function saveBook(uid, bookData, privateNotes = '') {
         genres: Array.isArray(bookData?.genres) ? bookData.genres : [],
         startedOn: bookData?.startedOn || '',
         finishedOn: bookData?.finishedOn || '',
+        // Bookmory metadata remains in the owner-only collection, never in public shelf projections.
+        isbn: bookData?.isbn ?? cachedBook?.isbn ?? null,
+        publisher: bookData?.publisher ?? cachedBook?.publisher ?? null,
+        publicationDate: bookData?.publicationDate ?? cachedBook?.publicationDate ?? null,
+        language: bookData?.language ?? cachedBook?.language ?? null,
+        bookFormat: bookData?.bookFormat ?? cachedBook?.bookFormat ?? null,
+        purchases: Array.isArray(bookData?.purchases) ? bookData.purchases : (cachedBook?.purchases || []),
+        bookmoryLogCount: Number(bookData?.bookmoryLogCount ?? cachedBook?.bookmoryLogCount) || 0,
+        wishlist: Boolean(bookData?.wishlist ?? cachedBook?.wishlist),
     };
 
     // 1. Save immediately to local storage mirror
@@ -559,6 +649,7 @@ export async function saveBook(uid, bookData, privateNotes = '') {
         ...baseFields,
         createdAtISO: existingLocal.createdAtISO || nowIso,
         updatedAtISO: nowIso,
+        _syncPending: true,
     };
     writeJson(LS_BOOKS_KEY, localBooks);
 
@@ -570,9 +661,11 @@ export async function saveBook(uid, bookData, privateNotes = '') {
 
     unmarkDeletedId(bookId);
     notifyBookSubscribers();
+    queuePublishedItemRefresh(safeUid, 'book', bookId);
 
     // 2. Attempt Firestore sync in try/catch
     if (db) {
+        const persist = async () => {
         try {
             const bookRef = doc(db, 'users', safeUid, 'books', bookId);
             const publicDoc = {
@@ -584,17 +677,28 @@ export async function saveBook(uid, bookData, privateNotes = '') {
             }
             await setDoc(bookRef, publicDoc, { merge: true });
 
-            const privateRef = doc(db, 'users', safeUid, 'books', bookId, 'private', 'notes');
-            await setDoc(
-                privateRef,
-                {
-                    notes: privateNotes || '',
-                    updatedAt: serverTimestamp(),
-                },
-                { merge: true }
-            );
+            // Imports without a notes payload must never erase handwritten private notes.
+            if (privateNotes !== undefined) {
+                const privateRef = doc(db, 'users', safeUid, 'books', bookId, 'private', 'notes');
+                await setDoc(privateRef, { notes: privateNotes || '', updatedAt: serverTimestamp() }, { merge: true });
+            }
+            markLocalCloudAcknowledged(LS_BOOKS_KEY, bookId, notifyBookSubscribers);
+            queuePublishedItemRefresh(safeUid, 'book', bookId);
+            void flushPublishedItemRefreshes();
         } catch (err) {
+            if (err?.code === 'permission-denied' || err?.code === 'unauthenticated') {
+                reportFirestoreError(err, 'saving private diary data');
+                throw err;
+            }
             console.warn('Firestore sync deferred (saved locally):', err.message);
+        }
+         };
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            // Firestore persistent cache queues the write. Return to the user
+            // immediately rather than waiting indefinitely for server acknowledgement.
+            void persist().catch((error) => reportFirestoreError(error, 'syncing offline diary changes'));
+        } else {
+            await persist();
         }
     }
 
@@ -633,15 +737,14 @@ export async function updateBookProgress(uid, bookId, currentPage, pages, status
     const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
     const { safeBookId, book, localBooks } = ensureLocalBook(bookId);
 
-    const totalPages = Number(pages) || Number(book.pages) || 350;
+    const totalPages = Number(pages) > 0 ? Number(pages) : (Number(book.pages) > 0 ? Number(book.pages) : null);
     const curPage = Number(currentPage) || 0;
     const progress = totalPages > 0 ? Math.min(100, Math.round((curPage / totalPages) * 100)) : 0;
 
     let newStatus = status || book.status || 'reading';
-    const finishedOn =
-        progress >= 100
-            ? new Date().toISOString().split('T')[0]
-            : book.finishedOn || '';
+    const finishedOn = progress >= 100
+        ? new Date().toISOString().split('T')[0]
+        : '';
 
     if (progress >= 100) {
         newStatus = 'completed';
@@ -658,10 +761,12 @@ export async function updateBookProgress(uid, bookId, currentPage, pages, status
         status: newStatus,
         finishedOn,
         updatedAtISO: new Date().toISOString(),
+        _syncPending: true,
     };
     writeJson(LS_BOOKS_KEY, localBooks);
     unmarkDeletedId(safeBookId);
     notifyBookSubscribers();
+    queuePublishedItemRefresh(safeUid, 'book', safeBookId);
 
     if (db) {
         try {
@@ -673,11 +778,16 @@ export async function updateBookProgress(uid, bookId, currentPage, pages, status
                 status: newStatus,
                 updatedAt: serverTimestamp(),
             };
-            if (progress >= 100) {
-                updates.finishedOn = finishedOn;
-            }
+            updates.finishedOn = finishedOn;
             await setDoc(bookRef, updates, { merge: true });
+            markLocalCloudAcknowledged(LS_BOOKS_KEY, safeBookId, notifyBookSubscribers);
+            queuePublishedItemRefresh(safeUid, 'book', safeBookId);
+            void flushPublishedItemRefreshes();
         } catch (err) {
+            if (err?.code === 'permission-denied' || err?.code === 'unauthenticated') {
+                reportFirestoreError(err, 'saving private diary data');
+                throw err;
+            }
             console.warn('Firestore progress sync deferred (saved locally):', err.message);
         }
     }
@@ -730,6 +840,8 @@ export async function addReadingSession(uid, bookId, sessionData = {}) {
                 createdAt: serverTimestamp(),
             });
         } catch (err) {
+            reportFirestoreError(err, 'saving reading session');
+            if (err?.code === 'permission-denied' || err?.code === 'unauthenticated') throw err;
             console.warn('Firestore reading session sync deferred (saved locally):', err.message);
         }
     }
@@ -756,8 +868,9 @@ export async function getReadingSessions(uid, bookId) {
             snap.docs.forEach((d) => {
                 mergedMap.set(d.id, { id: d.id, ...d.data() });
             });
-        } catch {
-            // Fall back to local sessions on permission error
+        } catch (err) {
+            reportFirestoreError(err, 'reading book sessions');
+            // Retain local sessions offline; the diary shell now explains access failures.
         }
     }
 
@@ -777,39 +890,7 @@ export async function getReadingSessions(uid, bookId) {
  * Falls back to local mirror + static books if database is unconfigured or permission-denied.
  */
 export function watchPublicBooks(ownerUid, onUpdate) {
-    let latestCloudBooks = [];
-    const emit = () => {
-        onUpdate(buildMergedBooks(latestCloudBooks));
-    };
-
-    bookSubscribers.add(emit);
-    emit();
-
-    if (!db || !ownerUid) {
-        return () => {
-            bookSubscribers.delete(emit);
-        };
-    }
-
-    const safeOwnerUid = sanitizeId(ownerUid, 'user');
-    const q = collection(db, 'users', safeOwnerUid, 'books');
-
-    const unsubFirestore = onSnapshot(
-        q,
-        (snapshot) => {
-            latestCloudBooks = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-            emit();
-        },
-        (error) => {
-            console.warn('Firestore public books listener fallback to local mirror:', error.message);
-            emit();
-        }
-    );
-
-    return () => {
-        bookSubscribers.delete(emit);
-        unsubFirestore();
-    };
+    return subscribePrivateMedia('book', ownerUid, onUpdate);
 }
 
 /**
@@ -852,13 +933,13 @@ export async function seedExistingBooks(uid, onProgress) {
         const b = fallbackBooks[i];
         onProgress?.(i, fallbackBooks.length, b.title);
         const bookId = sanitizeId(b.id || b.coverId || b.title.replace(/\s+/g, '-').toLowerCase(), 'book');
-        const pages = b.pages || 350;
+        const pages = Number(b.pages) > 0 ? Number(b.pages) : null;
         await saveBook(
             safeUid,
             {
                 ...b,
                 id: bookId,
-                currentPage: b.progress === 100 ? pages : Math.round(((b.progress || 0) / 100) * pages),
+                currentPage: pages ? (b.progress === 100 ? pages : Math.round(((b.progress || 0) / 100) * pages)) : 0,
                 pages,
             },
             b.privateNotes || ''
@@ -873,7 +954,7 @@ export async function seedExistingBooks(uid, onProgress) {
                     startedAt: log.start ? `${log.start}T12:00:00.000Z` : new Date().toISOString(),
                     minutes: log.minutes,
                     fromPage: 0,
-                    toPage: b.status === 'completed' ? pages : 0,
+                    toPage: 0, // Historical aggregate has no verified per-session page position
                     totalPages: pages,
                     status: b.status,
                 });
@@ -894,7 +975,7 @@ export async function seedExistingBooks(uid, onProgress) {
  * @returns {Promise<{books:number, games:number, sessions:number, error:string|null}>}
  */
 export async function syncLocalToCloud(uid) {
-    const result = { books: 0, games: 0, sessions: 0, error: null };
+    const result = { books: 0, games: 0, sessions: 0, skippedClean: 0, error: null };
     if (!db) {
         result.error = 'Firebase is not configured.';
         return result;
@@ -907,6 +988,8 @@ export async function syncLocalToCloud(uid) {
         const bookNotes = readJson(LS_BOOK_NOTES_KEY, {});
         const sessions = readJson(LS_SESSIONS_KEY, {});
         for (const [key, book] of Object.entries(localBooks)) {
+            // Do not overwrite newer cloud edits with a clean/stale local mirror.
+            if (!book?._syncPending) { result.skippedClean++; continue; }
             const id = sanitizeId(book?.id || key, 'book');
             await setDoc(
                 doc(db, 'users', safeUid, 'books', id),
@@ -935,6 +1018,7 @@ export async function syncLocalToCloud(uid) {
         const localGames = readJson(LS_GAMES_KEY, {});
         const gameNotes = readJson(LS_GAME_NOTES_KEY, {});
         for (const [key, game] of Object.entries(localGames)) {
+            if (!game?._syncPending) { result.skippedClean++; continue; }
             const id = sanitizeId(game?.id || key, 'game');
             const cleanGame = { ...stripLocal(game), id, mediaType: 'game' };
             await setDoc(
@@ -949,7 +1033,6 @@ export async function syncLocalToCloud(uid) {
                     { merge: true }
                 );
             }
-            await publishLibraryItem(safeUid, cleanGame).catch(() => {});
             result.games++;
         }
 
@@ -986,7 +1069,7 @@ export async function syncLocalToCloud(uid) {
  * @returns {Promise<{books: number, sessions: number, error: string|null}>}
  */
 export async function pullBooksFromCloud(uid) {
-    const result = { books: 0, sessions: 0, error: null };
+    const result = { books: 0, sessions: 0, conflicts: 0, error: null };
     if (!db) {
         result.error = 'Firebase is not configured.';
         return result;
@@ -1005,6 +1088,8 @@ export async function pullBooksFromCloud(uid) {
             if (deletedIds.has(id)) {
                 continue;
             }
+            // Retain unsynced local edits: a cloud pull must not erase them.
+            if (localBooks[id]?._syncPending) { result.conflicts++; continue; }
             const data = docSnap.data();
             localBooks[id] = { ...data, id };
             unmarkDeletedId(id);
@@ -1050,7 +1135,7 @@ export async function pullBooksFromCloud(uid) {
  * @returns {Promise<{games: number, error: string|null}>}
  */
 export async function pullGamesFromCloud(uid) {
-    const result = { games: 0, error: null };
+    const result = { games: 0, conflicts: 0, error: null };
     if (!db) {
         result.error = 'Firebase is not configured.';
         return result;
@@ -1068,11 +1153,11 @@ export async function pullGamesFromCloud(uid) {
             if (deletedIds.has(id)) {
                 continue;
             }
+            if (localGames[id]?._syncPending) { result.conflicts++; continue; }
             const data = docSnap.data();
             const gameRecord = { ...data, id, mediaType: 'game' };
             localGames[id] = gameRecord;
             unmarkDeletedId(id);
-            publishLibraryItem(safeUid, gameRecord).catch(() => {});
             result.games++;
 
             try {
@@ -1167,6 +1252,8 @@ export async function saveJournalEntry(uid, entry) {
             const docRef = doc(db, 'users', safeUid, 'journalEntries', id);
             await setDoc(docRef, { ...cleanEntry, updatedAt: serverTimestamp() }, { merge: true });
         } catch (err) {
+            reportFirestoreError(err, 'saving journal');
+            if (err?.code === 'permission-denied' || err?.code === 'unauthenticated') throw err;
             console.warn('Firestore journal save deferred (saved locally):', err.message);
         }
     }
@@ -1190,7 +1277,10 @@ export async function deleteJournalEntry(uid, entryId) {
     if (db) {
         try {
             await deleteDoc(doc(db, 'users', safeUid, 'journalEntries', id));
+            await unpublishHighlight(safeUid, id);
         } catch (err) {
+            reportFirestoreError(err, 'deleting journal');
+            if (err?.code === 'permission-denied' || err?.code === 'unauthenticated') throw err;
             console.warn('Firestore journal delete deferred (deleted locally):', err.message);
         }
     }
@@ -1241,6 +1331,7 @@ export function watchJournalEntries(ownerUid, onUpdate) {
             emit();
         },
         (error) => {
+            reportFirestoreError(error, 'private journal entries');
             console.warn('Firestore journal listener fallback to local mirror:', error.message);
             emit();
         }
@@ -1256,54 +1347,82 @@ export function watchJournalEntries(ownerUid, onUpdate) {
  * Fetches all sessions (reading and gaming) across all media items.
  * Prioritizes canonical users/{uid}/sessions with legacy subcollection fallback and ID deduplication.
  */
-export async function getAllSessions(uid) {
-    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+// Concurrent tab mounts share an in-flight read instead of repeating many queries.
+// Completed results are not cached: legacy changes must become visible immediately.
+const inFlightSessionLoads = new Map();
+
+async function fetchAllSessions(uid, safeUid) {
     const allLocal = readJson(LS_SESSIONS_KEY, {});
     const sessionMap = new Map();
 
-    // 1. Fetch canonical v2 sessions first (priority)
     if (db && uid) {
         try {
             const canonicalSnap = await getDocs(collection(db, 'users', safeUid, 'sessions'));
-            canonicalSnap.docs.forEach((d) => {
-                sessionMap.set(d.id, { id: d.id, ...d.data() });
+            canonicalSnap.docs.forEach((record) => {
+                sessionMap.set(record.id, { id: record.id, ...record.data() });
             });
         } catch (err) {
+            reportFirestoreError(err, 'loading canonical sessions');
+            if (err?.code === 'permission-denied' || err?.code === 'unauthenticated') throw err;
             console.warn('Could not fetch canonical sessions:', err.message);
         }
-    }
 
-    // 2. Fetch legacy sessions from books/{bookId}/sessions (backward compatibility)
-    if (db && uid) {
         try {
             const booksSnap = await getDocs(collection(db, 'users', safeUid, 'books'));
-            for (const bDoc of booksSnap.docs) {
-                const sSnap = await getDocs(collection(db, 'users', safeUid, 'books', bDoc.id, 'sessions'));
-                sSnap.docs.forEach((d) => {
-                    if (!sessionMap.has(d.id)) {
-                        sessionMap.set(d.id, { id: d.id, ...d.data(), mediaId: bDoc.id, mediaType: 'book' });
+            // The previous implementation awaited one HTTP/cache read *per book*.
+            // Bound parallelism to avoid both waterfall latency and bursty requests.
+            const books = booksSnap.docs;
+            let cursor = 0;
+            const worker = async () => {
+                while (cursor < books.length) {
+                    const bookDoc = books[cursor++];
+                    try {
+                        const snap = await getDocs(collection(db, 'users', safeUid, 'books', bookDoc.id, 'sessions'));
+                        snap.docs.forEach((record) => {
+                            if (!sessionMap.has(record.id)) {
+                                sessionMap.set(record.id, { id: record.id, ...record.data(), mediaId: bookDoc.id, mediaType: 'book' });
+                            }
+                        });
+                    } catch (err) {
+                        reportFirestoreError(err, 'loading legacy reading sessions');
+                        if (err?.code === 'permission-denied' || err?.code === 'unauthenticated') throw err;
+                        // A failed legacy subcollection must not hide sessions from other books.
+                        console.warn('Could not load legacy sessions:', bookDoc.id, err.message);
                     }
-                });
-            }
-        } catch {
-            // fallback to local mirror
+                }
+            };
+            await Promise.all(Array.from({ length: Math.min(6, books.length) }, () => worker()));
+        } catch (err) {
+            reportFirestoreError(err, 'loading legacy sessions');
+            if (err?.code === 'permission-denied' || err?.code === 'unauthenticated') throw err;
+            console.warn('Legacy session collection unavailable:', err.message);
         }
     }
 
-    // 3. Fallback to local storage sessions if not present
-    Object.entries(allLocal).forEach(([mediaId, arr]) => {
-        if (Array.isArray(arr)) {
-            arr.forEach((s) => {
-                if (s && s.id && !sessionMap.has(String(s.id))) {
-                    sessionMap.set(String(s.id), { ...s, mediaId });
+    Object.entries(allLocal).forEach(([mediaId, entries]) => {
+        if (Array.isArray(entries)) {
+            entries.forEach((entry) => {
+                if (entry?.id && !sessionMap.has(String(entry.id))) {
+                    sessionMap.set(String(entry.id), { ...entry, mediaId });
                 }
             });
         }
     });
-
     return Array.from(sessionMap.values()).sort((a, b) =>
         String(b.startedAt || '').localeCompare(String(a.startedAt || ''))
     );
+}
+
+export function getAllSessions(uid) {
+    const safeUid = sanitizeId(uid || OWNER_UID || 'owner', 'user');
+    const previous = inFlightSessionLoads.get(safeUid);
+    if (previous) return previous;
+    const pending = fetchAllSessions(uid, safeUid);
+    inFlightSessionLoads.set(safeUid, pending);
+    void pending.finally(() => {
+        if (inFlightSessionLoads.get(safeUid) === pending) inFlightSessionLoads.delete(safeUid);
+    }).catch(() => {});
+    return pending;
 }
 
 /**
@@ -1351,8 +1470,19 @@ export async function publishLibraryItem(uid, item, options = {}) {
     if (db) {
         try {
             const shelfRef = doc(db, 'publicProfiles', safeUid, 'shelf', id);
-            await setDoc(shelfRef, { ...sanitized, updatedAt: serverTimestamp() }, { merge: true });
+            await setDoc(shelfRef, { ...sanitized, publicOptions: {
+                showStatus: options.showStatus !== false,
+                showRating: options.showRating !== false,
+                showTags: options.showTags !== false,
+            }, updatedAt: serverTimestamp() }, { merge: true });
         } catch (err) {
+            if (err?.code === 'permission-denied' || err?.code === 'unauthenticated') {
+                const local = readJson(LS_PUBLIC_SHELF_KEY, {});
+                delete local[id];
+                writeJson(LS_PUBLIC_SHELF_KEY, local);
+                notifyPublicShelfSubscribers();
+                throw err;
+            }
             console.warn('Firestore publishLibraryItem deferred (saved locally):', err.message);
         }
     }
@@ -1377,6 +1507,7 @@ export async function unpublishLibraryItem(uid, itemId) {
             const shelfRef = doc(db, 'publicProfiles', safeUid, 'shelf', id);
             await deleteDoc(shelfRef);
         } catch (err) {
+            if (err?.code === 'permission-denied' || err?.code === 'unauthenticated') throw err;
             console.warn('Firestore unpublishLibraryItem deferred (deleted locally):', err.message);
         }
     }
@@ -1429,6 +1560,7 @@ export function watchPublicShelf(ownerUid, onUpdate) {
             emit();
         },
         (error) => {
+            reportFirestoreError(error, 'public shelf');
             console.warn('Firestore public shelf listener fallback to local mirror:', error.message);
             emit();
         }
@@ -1458,6 +1590,8 @@ export async function publishHighlight(uid, entry, options = {}) {
             const docRef = doc(db, 'publicProfiles', safeUid, 'highlights', id);
             await setDoc(docRef, { ...sanitized, updatedAt: serverTimestamp() }, { merge: true });
         } catch (err) {
+            reportFirestoreError(err, 'publishing highlight');
+            if (err?.code === 'permission-denied' || err?.code === 'unauthenticated') throw err;
             console.warn('Firestore publishHighlight deferred (saved locally):', err.message);
         }
     }
@@ -1482,6 +1616,8 @@ export async function unpublishHighlight(uid, highlightId) {
             const docRef = doc(db, 'publicProfiles', safeUid, 'highlights', id);
             await deleteDoc(docRef);
         } catch (err) {
+            reportFirestoreError(err, 'unpublishing highlight');
+            if (err?.code === 'permission-denied' || err?.code === 'unauthenticated') throw err;
             console.warn('Firestore unpublishHighlight deferred (deleted locally):', err.message);
         }
     }
@@ -1535,6 +1671,7 @@ export function watchPublicHighlights(ownerUid, onUpdate) {
             emit();
         },
         (error) => {
+            reportFirestoreError(error, 'public highlights');
             console.warn('Firestore public highlights listener fallback to local mirror:', error.message);
             emit();
         }
@@ -1562,8 +1699,10 @@ export async function exportUserData(uid) {
         try {
             const gamesSnap = await getDocs(collection(db, 'users', safeUid, 'games'));
             cloudGames = gamesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        } catch {
-            // Fall back to local games if cloud fails
+        } catch (error) {
+            reportFirestoreError(error, 'exporting games');
+            if (error?.code === 'permission-denied' || error?.code === 'unauthenticated') throw error;
+            // Non-authorisation network failures retain local backup fallback.
         }
     }
     const mergedGames = buildMergedGames(cloudGames);
@@ -1583,8 +1722,10 @@ export async function exportUserData(uid) {
         try {
             const booksSnap = await getDocs(collection(db, 'users', safeUid, 'books'));
             cloudBooks = booksSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        } catch {
-            // Fall back to local books if cloud fails
+        } catch (error) {
+            reportFirestoreError(error, 'exporting books');
+            if (error?.code === 'permission-denied' || error?.code === 'unauthenticated') throw error;
+            // Non-authorisation network failures retain local backup fallback.
         }
     }
     const mergedBooks = buildMergedBooks(cloudBooks);
@@ -1600,14 +1741,72 @@ export async function exportUserData(uid) {
         });
     }
 
+    // Canonical v2 diary history must be included in a "Full JSON Backup".
+    // Never silently present an incomplete remote backup as complete.
+    const canonicalData = {};
+    const publicData = {};
+    const nestedData = { books: {}, games: {} };
+    const backupWarnings = [];
+    const pendingBooks = books.filter((record) => record._syncPending).length;
+    const pendingGames = games.filter((record) => record._syncPending).length;
+    if (pendingBooks || pendingGames) backupWarnings.push(`${pendingBooks} books and ${pendingGames} games still have local unsynced changes.`);
+    const fetchForBackup = async (segments, target, key) => {
+        if (!db || !uid) {
+            target[key] = [];
+            return;
+        }
+        try {
+            const snapshot = await getDocs(collection(db, ...segments));
+            target[key] = snapshot.docs.map((record) => ({ id: record.id, ...record.data() }));
+            if (snapshot.metadata?.fromCache) {
+                backupWarnings.push(`${segments.join('/')} was read from local cache, not verified against the server.`);
+            }
+        } catch (error) {
+            reportFirestoreError(error, `exporting ${segments.join('/')}`);
+            // Authorization failures must never be confused with a successful full backup.
+            if (error?.code === 'permission-denied' || error?.code === 'unauthenticated') {
+                throw new Error(`Full backup blocked by ${error.code} at ${segments.join('/')}. Verify deployed Firestore rules before exporting.`);
+            }
+            backupWarnings.push(`${segments.join('/')} could not be fully read: ${error.message}`);
+            target[key] = [];
+        }
+    };
+    if (!db) backupWarnings.push('Firebase is not configured: only the local legacy mirror is available.');
+    for (const name of ['libraryItems', 'attempts', 'sessions', 'historicalAggregates', 'journalEntries', 'journal', 'goals']) {
+        await fetchForBackup(['users', safeUid, name], canonicalData, name);
+    }
+    // Include ALL legacy nested documents, not only the known notes document.
+    // These records are essential for a disaster-recovery backup of older installs.
+    for (const book of books) {
+        const id = sanitizeId(book.id, 'book');
+        const nested = {};
+        await fetchForBackup(['users', safeUid, 'books', id, 'sessions'], nested, 'sessions');
+        await fetchForBackup(['users', safeUid, 'books', id, 'private'], nested, 'private');
+        nestedData.books[id] = nested;
+    }
+    for (const game of games) {
+        const id = sanitizeId(game.id, 'game');
+        const nested = {};
+        await fetchForBackup(['users', safeUid, 'games', id, 'private'], nested, 'private');
+        nestedData.games[id] = nested;
+    }
+    for (const name of ['shelf', 'highlights']) {
+        await fetchForBackup(['publicProfiles', safeUid, name], publicData, name);
+    }
+
     return {
         exportedAt: new Date().toISOString(),
-        version: '1.0',
+        version: '2.0',
         uid: safeUid,
+        isCloudComplete: backupWarnings.length === 0,
+        backupWarnings,
         totalGames: games.length,
         totalBooks: books.length,
         games,
         books,
+        canonicalData,
+        nestedData,
+        publicData,
     };
 }
 
@@ -1620,30 +1819,18 @@ export async function downloadJsonBackup(data, filename) {
     const finalFilename = filename || defaultName;
     const jsonString = JSON.stringify(data, null, 2);
 
-    // Mobile / Capacitor environment safety
-    if (window.Capacitor?.isNativePlatform?.() && navigator.share) {
+    // Do not put private diary JSON on the system clipboard or in share-sheet text.
+    // Only share a real file; otherwise use the normal download path below.
+    if (window.Capacitor?.isNativePlatform?.() && navigator.share && navigator.canShare) {
         try {
             const file = new File([jsonString], finalFilename, { type: 'application/json' });
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({
-                    files: [file],
-                    title: finalFilename,
-                });
+            if (navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title: finalFilename });
                 return;
             }
-            await navigator.share({
-                title: finalFilename,
-                text: jsonString,
-            });
-            return;
         } catch (shareErr) {
             if (shareErr.name === 'AbortError') return;
-            console.warn('Share failed on mobile, attempting clipboard fallback:', shareErr);
-            if (navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(jsonString);
-                alert('Backup JSON copied to clipboard.');
-                return;
-            }
+            console.warn('Secure file sharing unavailable; using file download:', shareErr);
         }
     }
 

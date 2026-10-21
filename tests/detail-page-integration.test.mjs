@@ -33,12 +33,12 @@ test('TC-03: GameDetailPage includes Play Sessions tab integrating useDiarySessi
     );
 });
 
-test('TC-04: GameDetailPage manual playtime logging creates canonical session', async () => {
+test('TC-04: GameDetailPage total-hours correction must not invent a daily play session', async () => {
     const gameDetailPath = resolve('src/pages/app/GameDetailPage.jsx');
     const content = readFileSync(gameDetailPath, 'utf-8');
 
     assert.ok(
-        content.includes('createSession') || content.includes('getDiaryRepository'),
-        'GameDetailPage must persist canonical sessions via repository when logging playtime'
+        !content.includes('repo.createSession('),
+        'Editing cumulative hours must not fabricate a dated play session'
     );
 });

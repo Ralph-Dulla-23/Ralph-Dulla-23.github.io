@@ -1,3 +1,4 @@
+import DiarySelect from '../../components/ui/DiarySelect';
 import React, { useState, useEffect, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { useParams, useNavigate, Link } from 'react-router-dom';
@@ -7,6 +8,7 @@ import { useTimer } from '../../context/TimerContext';
 import {
     watchPublicBooks,
     saveBook,
+    addReadingSession,
     deleteBook,
     getBookPrivateNotes,
     getReadingSessions,
@@ -37,7 +39,7 @@ export default function BookDetailPage({ darkMode, setDarkMode }) {
     const { id } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { startTimer } = useTimer();
+    const { startTimer, activeTimer } = useTimer();
 
     const [book, setBook] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -48,6 +50,7 @@ export default function BookDetailPage({ darkMode, setDarkMode }) {
     const [newCurrentPage, setNewCurrentPage] = useState('');
     const [newStatus, setNewStatus] = useState('reading');
     const [savingProgress, setSavingProgress] = useState(false);
+    const [logPageActivity, setLogPageActivity] = useState(false);
 
     // Private notes & sessions
     const [privateNotes, setPrivateNotes] = useState('');
@@ -191,10 +194,26 @@ export default function BookDetailPage({ darkMode, setDarkMode }) {
                 ...book,
                 currentPage: pageNum,
                 status: statusToSet,
-                finishedOn: isCompleted ? (book.finishedOn || new Date().toISOString().split('T')[0]) : book.finishedOn,
+                finishedOn: isCompleted ? (book.finishedOn || new Date().toISOString().split('T')[0]) : '',
             };
 
+            // A metadata correction does not imply reading today. Opt in explicitly.
+            if (logPageActivity && pageNum < (Number(book.currentPage) || 0)) {
+                throw new Error('To log pages read, the ending page must exceed the previous page. Uncheck activity logging for corrections.');
+            }
             await saveBook(user.uid, updated, privateNotes);
+            if (logPageActivity && pageNum > (Number(book.currentPage) || 0)) {
+                await addReadingSession(user.uid, book.id, {
+                    id: `manual_${Date.now()}`,
+                    fromPage: Number(book.currentPage) || 0,
+                    toPage: pageNum,
+                    totalPages: book.pages,
+                    minutes: 0,
+                    startedAt: new Date().toISOString(),
+                    status: statusToSet,
+                });
+            }
+            setLogPageActivity(false);
             setIsProgressModalOpen(false);
         } catch (err) {
             alert('Failed to update progress: ' + err.message);
@@ -266,7 +285,7 @@ export default function BookDetailPage({ darkMode, setDarkMode }) {
                     </button>
                     <button
                         onClick={handleToggleFavorite}
-                        className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                        className={`diary-heart diary-press p-2 rounded-xl border transition-colors cursor-pointer ${
                             book.favorite
                                 ? 'bg-pink-50 dark:bg-pink-950/40 border-pink-200 dark:border-pink-900/50 text-pink-500'
                                 : 'bg-white dark:bg-gray-900 border-border dark:border-gray-800 text-secondary dark:text-gray-400 hover:text-pink-500'
@@ -286,15 +305,17 @@ export default function BookDetailPage({ darkMode, setDarkMode }) {
             </div>
 
             {/* Book Header Card */}
-            <div className="bg-white dark:bg-gray-900 border border-border dark:border-gray-800 rounded-3xl p-6 sm:p-8 shadow-sm mb-6">
+            <div className="diary-feature-card rounded-3xl p-5 sm:p-8 mb-6">
                 <div className="flex flex-col sm:flex-row gap-6 sm:gap-8 items-start">
                     {/* Cover Art */}
-                    <div className="w-32 sm:w-44 shrink-0 mx-auto sm:mx-0 aspect-[2/3] rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border border-border/50 dark:border-gray-800 shadow-md">
+                    <div className="diary-detail-cover w-32 sm:w-44 shrink-0 mx-auto sm:mx-0 aspect-[2/3] rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border border-border/50 dark:border-gray-800 shadow-md">
                         {coverSrc ? (
                             <img
                                 src={coverSrc}
                                 alt={book.title}
-                                className="w-full h-full object-cover"
+                                decoding="async"
+                                width="176" height="264"
+                                className="w-full h-full object-contain"
                             />
                         ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center">
@@ -338,7 +359,7 @@ export default function BookDetailPage({ darkMode, setDarkMode }) {
 
                             <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mb-4">
                                 <div
-                                    className={`h-full rounded-full transition-all duration-500 ${
+                                    className={`h-full rounded-full diary-progress-fill ${
                                         book.status === 'completed' ? 'bg-green-500' : 'bg-blue-500'
                                     }`}
                                     style={{ width: `${progressPercent}%` }}
@@ -354,11 +375,12 @@ export default function BookDetailPage({ darkMode, setDarkMode }) {
                                             itemTitle: book.title,
                                             itemCover: book.cover || '',
                                             fromPage: book.currentPage || 0,
+                                            totalPages: book.pages || null,
                                         });
                                     }}
-                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary dark:bg-gray-100 text-white dark:text-gray-900 text-xs font-semibold shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
+                                    className="inline-flex items-center justify-center gap-2 min-h-11 px-5 py-2.5 rounded-xl bg-primary dark:bg-gray-100 text-white dark:text-gray-900 text-sm font-semibold shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
                                 >
-                                    <BsClock className="w-3.5 h-3.5" /> Start Reading
+                                    <BsClock className="w-3.5 h-3.5" /> {activeTimer?.mediaType === 'book' && String(activeTimer?.itemId) === String(book.id) && ['running', 'paused'].includes(activeTimer?.state) ? 'Resume Reading' : 'Start Reading'}
                                 </button>
                                 <button
                                     onClick={() => setIsProgressModalOpen(true)}
@@ -392,7 +414,7 @@ export default function BookDetailPage({ darkMode, setDarkMode }) {
                             : 'border-transparent text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-200'
                     }`}
                 >
-                    Sessions ({sessions.length})
+                    Sessions ({displaySessions.length})
                 </button>
                 <button
                     onClick={() => setActiveTab('notes')}
@@ -494,7 +516,9 @@ export default function BookDetailPage({ darkMode, setDarkMode }) {
                                         </p>
                                     </div>
                                     <span className="font-bold text-primary dark:text-gray-100">
-                                        {sess.minutes ? `${sess.minutes} min` : `${Math.round((sess.activeSeconds || 0) / 60)} min`}
+                                        {Number(sess.activeSeconds) > 0 || Number(sess.minutes) > 0
+                                            ? `${Math.max(1, Math.round(Number(sess.activeSeconds || 0) / 60) || Number(sess.minutes))} min`
+                                            : 'Progress log'}
                                     </span>
                                 </div>
                             ))}
@@ -577,20 +601,13 @@ export default function BookDetailPage({ darkMode, setDarkMode }) {
                                 <label className="block text-xs font-medium text-secondary dark:text-gray-400 mb-1">
                                     Status
                                 </label>
-                                <select
-                                    value={newStatus}
-                                    onChange={(e) => setNewStatus(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-xl text-xs bg-gray-50 dark:bg-gray-800 border border-border dark:border-gray-700 text-primary dark:text-gray-100"
-                                >
-                                    <option value="reading">Reading</option>
-                                    <option value="completed">Completed</option>
-                                    <option value="want-to-read">Want to Read</option>
-                                    <option value="paused">Paused</option>
-                                    <option value="dropped">Dropped</option>
-                                    <option value="rereading">Rereading</option>
-                                </select>
+                                <DiarySelect label="Status" value={newStatus} onChange={setNewStatus} options={[{ value: 'reading', label: 'Reading' },{ value: 'completed', label: 'Completed' },{ value: 'want-to-read', label: 'Want to Read' },{ value: 'paused', label: 'Paused' },{ value: 'dropped', label: 'Dropped' },{ value: 'rereading', label: 'Rereading' }]} />
                             </div>
 
+                            <label className="flex items-start gap-2 rounded-xl bg-sky-50 p-3 text-xs leading-5 text-slate-700 dark:bg-sky-900/20 dark:text-slate-200">
+                                <input type="checkbox" checked={logPageActivity} onChange={e => setLogPageActivity(e.target.checked)} className="mt-1" />
+                                <span><strong>Log pages as reading activity today</strong><br/>Only enable for pages genuinely read today. Leave off for corrections and imported progress. This records page activity without inventing reading minutes.</span>
+                            </label>
                             <div className="flex items-center justify-end gap-2 pt-2">
                                 <button
                                     type="button"

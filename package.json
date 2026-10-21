@@ -10,7 +10,15 @@
     "test": "node --test tests/*.test.mjs",
     "check": "npm run lint && npm run test && npm run build",
     "preview": "vite preview",
-    "upload:bookmory": "node scripts/upload-bookmory.mjs"
+    "verify:dist": "node scripts/verify-release-assets.mjs",
+    "profile:android": "node scripts/profile-android-frames.mjs",
+    "verify:privacy": "node scripts/verify-private-source.mjs",
+    "release:status": "node scripts/rc1-readiness.mjs",
+    "verify:rules-static": "node scripts/verify-firebase-rules-static.mjs",
+    "verify:emulator": "node scripts/phase11-emulator-acceptance.mjs --run",
+    "preflight:emulator": "node scripts/phase11-emulator-acceptance.mjs --preflight",
+    "release:gates": "node scripts/phase12-release-gates.mjs --strict",
+    "release:report": "node scripts/phase12-release-gates.mjs --json"
   },
   "dependencies": {
     "@capacitor/core": "^8.5.3",
@@ -26,7 +34,9 @@
     "react-icons": "^5.5.0",
     "react-router-dom": "^7.13.0",
     "recharts": "^3.10.1",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "@capacitor/filesystem": "^8.0.0",
+    "@capacitor/share": "^8.0.0"
   },
   "devDependencies": {
     "@capacitor/android": "^8.5.3",

@@ -64,6 +64,10 @@ service cloud.firestore {
       match /historicalAggregates/{id} {
         allow read, write: if isOwner(uid);
       }
+      // Owner-only reading targets used in Detailed Insights.
+      match /goals/{goalId} {
+        allow read, write: if isOwner(uid);
+      }
     }
   }
 }

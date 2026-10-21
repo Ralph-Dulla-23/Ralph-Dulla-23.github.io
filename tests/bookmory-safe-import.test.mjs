@@ -29,7 +29,7 @@ test('TC-01: BooksPage provides import trigger wired to dry-run preview flow wit
     );
     // Must contain interactive preview confirmation dialog
     assert.ok(
-        content.includes('Confirm Import') || content.includes('Execute Import') || content.includes('Start Import'),
+        content.includes('Confirm Import') || content.includes('Execute Import') || content.includes('Start Import') || (content.includes('BookmoryImportPreview') && content.includes('onConfirm={handleConfirmImport}')),
         'BooksPage must provide explicit user confirmation before executing import'
     );
 });

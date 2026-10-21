@@ -17,9 +17,9 @@ test('Phase 2 Exit Gate - P2-01: 5-Tab Diary Shell & Navigation redirects certif
     assert.ok(appContent.includes('/app/home'), 'Route /app/home must exist');
     assert.ok(appContent.includes('/app/library/books'), 'Route /app/library/books must exist');
     assert.ok(appContent.includes('/app/library/games'), 'Route /app/library/games must exist');
-    assert.ok(appContent.includes('/app/calendar'), 'Route /app/calendar must exist');
-    assert.ok(appContent.includes('/app/journal'), 'Route /app/journal must exist');
-    assert.ok(appContent.includes('/app/insights'), 'Route /app/insights must exist');
+    assert.ok(appContent.includes('path="calendar"'), 'Route /app/calendar must exist');
+    assert.ok(appContent.includes('path="journal"'), 'Route /app/journal must exist');
+    assert.ok(appContent.includes('path="insights"'), 'Route /app/insights must exist');
 });
 
 test('Phase 2 Exit Gate - P2-02: Library segmented switch and detail pages certified', () => {
@@ -63,7 +63,7 @@ test('Phase 2 Exit Gate - P2-04: Home dashboard with live active media and Conti
 
     assert.ok(content.includes('watchPublicBooks'), 'Home must watch public books');
     assert.ok(content.includes('watchPublicGames'), 'Home must watch public games');
-    assert.ok(content.includes('Currently Active'), 'Home must show Currently Active section');
+    assert.ok(content.includes('HomeHighlights'), 'Home must render the premium active reading/playing component');
     assert.ok(content.includes('startTimer'), 'Home must allow starting/resuming timer on active media');
 });
 
@@ -74,10 +74,10 @@ test('Phase 2 Exit Gate - All 5 Exit Criteria fully verified', () => {
 
     // 2. Media detail routes
     const appContent = fs.readFileSync(path.join(ROOT_DIR, 'src', 'App.jsx'), 'utf8');
-    assert.ok(appContent.includes('/app/books/:id'), 'Route /app/books/:id must be registered');
-    assert.ok(appContent.includes('/app/games/:id'), 'Route /app/games/:id must be registered');
+    assert.ok(appContent.includes('path="books/:id"'), 'Route /app/books/:id must be registered');
+    assert.ok(appContent.includes('path="games/:id"'), 'Route /app/games/:id must be registered');
 
     // 3. Backward compatibility
-    assert.ok(appContent.includes('/app/books'), 'Legacy /app/books redirect preserved');
-    assert.ok(appContent.includes('/app/games'), 'Legacy /app/games redirect preserved');
+    assert.ok(appContent.includes('path="books"'), 'Legacy /app/books redirect preserved');
+    assert.ok(appContent.includes('path="games"'), 'Legacy /app/games redirect preserved');
 });

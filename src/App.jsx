@@ -1,18 +1,11 @@
 import React, { useEffect, useState, lazy, Suspense } from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import Lenis from 'lenis';
-import Layout from './components/Layout';
-import Hero from './components/Hero';
-import About from './components/About';
-import Experience from './components/Experience';
-import Projects from './components/Projects';
-import Certificates from './components/Certificates';
-import Library from './components/Library';
-import Contact from './components/Contact';
+import { HashRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ActivityTimerProvider } from './context/TimerContext';
 import RequireAuth from './components/auth/RequireAuth';
+import DiaryShell from './components/diary/DiaryShell';
 
+const PortfolioPage = lazy(() => import('./pages/PortfolioHomePage'));
 const LibraryPage = lazy(() => import('./pages/LibraryPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const GamesPage = lazy(() => import('./pages/app/GamesPage'));
@@ -24,14 +17,11 @@ const InsightsPage = lazy(() => import('./pages/app/InsightsPage'));
 const BookDetailPage = lazy(() => import('./pages/app/BookDetailPage'));
 const GameDetailPage = lazy(() => import('./pages/app/GameDetailPage'));
 
-// eslint-disable-next-line react-refresh/only-export-components
-export const lenisRef = { current: null };
-
 function ScrollToTop() {
   const location = useLocation();
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [location]);
+    if (!location.pathname.startsWith('/app')) window.scrollTo(0, 0);
+  }, [location.pathname]);
   return null;
 }
 
@@ -43,44 +33,6 @@ function PageLoader() {
     >
       <div className="w-8 h-8 border-2 border-gray-300 dark:border-gray-800 border-t-primary dark:border-t-gray-200 rounded-full animate-spin" />
     </div>
-  );
-}
-
-function PortfolioPage({ darkMode, setDarkMode }) {
-  useEffect(() => {
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
-    });
-
-    lenisRef.current = lenis;
-
-    let rafId;
-    function raf(time) {
-      lenis.raf(time);
-      rafId = requestAnimationFrame(raf);
-    }
-
-    rafId = requestAnimationFrame(raf);
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      lenis.destroy();
-      lenisRef.current = null;
-    };
-  }, []);
-
-  return (
-    <Layout darkMode={darkMode} setDarkMode={setDarkMode}>
-      <Hero />
-      <About />
-      <Experience />
-      <Projects />
-      <Certificates />
-      <Library />
-      <Contact />
-    </Layout>
   );
 }
 
@@ -125,79 +77,30 @@ function App() {
               {/* Owner Sign In */}
               <Route path="/login" element={<LoginPage darkMode={darkMode} setDarkMode={setDarkMode} />} />
 
-              {/* Protected Owner Diary App */}
-              <Route path="/app" element={<Navigate to="/app/home" replace />} />
+              {/* One persistent shell and one set of timer overlays across diary routes. */}
               <Route
-                path="/app/home"
+                path="/app"
                 element={
                   <RequireAuth>
-                    <DiaryHomePage darkMode={darkMode} setDarkMode={setDarkMode} />
+                    <DiaryShell darkMode={darkMode} setDarkMode={setDarkMode}>
+                      <Outlet />
+                    </DiaryShell>
                   </RequireAuth>
                 }
-              />
-              <Route path="/app/library" element={<Navigate to="/app/library/books" replace />} />
-              <Route
-                path="/app/library/books"
-                element={
-                  <RequireAuth>
-                    <BooksPage darkMode={darkMode} setDarkMode={setDarkMode} />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/app/library/games"
-                element={
-                  <RequireAuth>
-                    <GamesPage darkMode={darkMode} setDarkMode={setDarkMode} />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/app/calendar"
-                element={
-                  <RequireAuth>
-                    <CalendarPage darkMode={darkMode} setDarkMode={setDarkMode} />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/app/journal"
-                element={
-                  <RequireAuth>
-                    <JournalPage darkMode={darkMode} setDarkMode={setDarkMode} />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/app/insights"
-                element={
-                  <RequireAuth>
-                    <InsightsPage darkMode={darkMode} setDarkMode={setDarkMode} />
-                  </RequireAuth>
-                }
-              />
-
-              {/* Media Detail Routes */}
-              <Route
-                path="/app/books/:id"
-                element={
-                  <RequireAuth>
-                    <BookDetailPage darkMode={darkMode} setDarkMode={setDarkMode} />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/app/games/:id"
-                element={
-                  <RequireAuth>
-                    <GameDetailPage darkMode={darkMode} setDarkMode={setDarkMode} />
-                  </RequireAuth>
-                }
-              />
-
-              {/* Legacy Compatibility Redirects */}
-              <Route path="/app/books" element={<Navigate to="/app/library/books" replace />} />
-              <Route path="/app/games" element={<Navigate to="/app/library/games" replace />} />
+              >
+                <Route index element={<Navigate to="home" replace />} />
+                <Route path="home" element={<DiaryHomePage darkMode={darkMode} setDarkMode={setDarkMode} />} />
+                <Route path="library" element={<Navigate to="/app/library/books" replace />} />
+                <Route path="library/books" element={<BooksPage darkMode={darkMode} setDarkMode={setDarkMode} />} />
+                <Route path="library/games" element={<GamesPage darkMode={darkMode} setDarkMode={setDarkMode} />} />
+                <Route path="calendar" element={<CalendarPage darkMode={darkMode} setDarkMode={setDarkMode} />} />
+                <Route path="journal" element={<JournalPage darkMode={darkMode} setDarkMode={setDarkMode} />} />
+                <Route path="insights" element={<InsightsPage darkMode={darkMode} setDarkMode={setDarkMode} />} />
+                <Route path="books/:id" element={<BookDetailPage darkMode={darkMode} setDarkMode={setDarkMode} />} />
+                <Route path="games/:id" element={<GameDetailPage darkMode={darkMode} setDarkMode={setDarkMode} />} />
+                <Route path="books" element={<Navigate to="/app/library/books" replace />} />
+                <Route path="games" element={<Navigate to="/app/library/games" replace />} />
+              </Route>
 
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/" replace />} />

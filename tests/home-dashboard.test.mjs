@@ -8,6 +8,7 @@ const ROOT_DIR = process.cwd();
 test('TC-01: HomePage component displays Currently Active section for reading and playing items', () => {
     const homePath = path.join(ROOT_DIR, 'src', 'pages', 'app', 'HomePage.jsx');
     const content = fs.readFileSync(homePath, 'utf8');
+    const highlights = fs.readFileSync(path.join(ROOT_DIR, 'src', 'components', 'home', 'HomeHighlights.jsx'), 'utf8');
 
     assert.ok(
         content.includes('watchPublicBooks'),
@@ -18,12 +19,12 @@ test('TC-01: HomePage component displays Currently Active section for reading an
         'HomePage must subscribe to public games'
     );
     assert.ok(
-        content.includes('Currently Active') || content.includes('Continue Reading') || content.includes('Currently Reading'),
+        content.includes('HomeHighlights') && highlights.includes('Continue reading') && highlights.includes('Continue playing'),
         'HomePage must render active items section'
     );
     assert.ok(
-        content.includes('Continue'),
-        'HomePage must provide Continue action button on active media'
+        highlights.includes('Resume reading') && highlights.includes('Continue'),
+        'HomeHighlights must provide reading and gaming actions'
     );
 });
 

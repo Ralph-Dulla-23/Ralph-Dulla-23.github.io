@@ -1,3 +1,4 @@
+import DiarySelect from '../../components/ui/DiarySelect';
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { useParams, useNavigate, Link } from 'react-router-dom';
@@ -12,7 +13,6 @@ import {
     publishLibraryItem,
     unpublishLibraryItem,
     watchPublicShelf,
-    getDiaryRepository,
 } from '../../lib/db';
 import { useDiarySessions } from '../../hooks/useDiarySessions';
 import {
@@ -139,31 +139,13 @@ export default function GameDetailPage({ darkMode, setDarkMode }) {
                 ...game,
                 hoursPlayed: hours,
                 status: newStatus,
-                finishedOn: isFinished ? (game.finishedOn || new Date().toISOString().split('T')[0]) : game.finishedOn,
+                finishedOn: isFinished ? (game.finishedOn || new Date().toISOString().split('T')[0]) : '',
             };
 
             await saveGame(user.uid, updated, privateNotes);
 
-            // Record canonical session if hours increased
-            if (hours > (game.hoursPlayed || 0)) {
-                try {
-                    const repo = getDiaryRepository(user.uid);
-                    const deltaSeconds = Math.round((hours - (game.hoursPlayed || 0)) * 3600);
-                    await repo.createSession({
-                        id: `sess-${Date.now()}`,
-                        schemaVersion: 2,
-                        mediaType: 'game',
-                        libraryItemId: game.id,
-                        startedAt: new Date().toISOString(),
-                        activeSeconds: deltaSeconds,
-                        source: 'manual',
-                        timezone: 'Asia/Manila',
-                        notes: `Manual playtime update to ${hours}h`,
-                    });
-                } catch (sessErr) {
-                    console.warn('Could not record canonical game session for manual update:', sessErr.message);
-                }
-            }
+            // Cumulative corrections are baseline edits, not dated play sessions.
+            // Creating a synthetic session here double-counts time in Insights.
 
             setIsPlaytimeModalOpen(false);
         } catch (err) {
@@ -241,10 +223,10 @@ export default function GameDetailPage({ darkMode, setDarkMode }) {
             </div>
 
             {/* Game Header Card */}
-            <div className="bg-white dark:bg-gray-900 border border-border dark:border-gray-800 rounded-3xl p-6 sm:p-8 shadow-sm mb-6">
+            <div className="diary-feature-card rounded-3xl p-6 sm:p-8 mb-6">
                 <div className="flex flex-col sm:flex-row gap-6 sm:gap-8 items-start">
                     {/* Cover Art */}
-                    <div className="w-full sm:w-56 shrink-0 aspect-[16/9] rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border border-border/50 dark:border-gray-800 shadow-md">
+                    <div className="diary-detail-cover w-full sm:w-56 shrink-0 aspect-[16/9] rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border border-border/50 dark:border-gray-800 shadow-md">
                         {game.cover ? (
                             <img
                                 src={game.cover}
@@ -518,18 +500,7 @@ export default function GameDetailPage({ darkMode, setDarkMode }) {
                                 <label className="block text-xs font-medium text-secondary dark:text-gray-400 mb-1">
                                     Status
                                 </label>
-                                <select
-                                    value={newStatus}
-                                    onChange={(e) => setNewStatus(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-xl text-xs bg-gray-50 dark:bg-gray-800 border border-border dark:border-gray-700 text-primary dark:text-gray-100"
-                                >
-                                    <option value="finished">Finished</option>
-                                    <option value="playing">Playing</option>
-                                    <option value="backlog">Backlog</option>
-                                    <option value="paused">Paused</option>
-                                    <option value="dropped">Dropped</option>
-                                    <option value="replaying">Replaying</option>
-                                </select>
+                                <DiarySelect label="Status" value={newStatus} onChange={setNewStatus} options={[{ value: 'finished', label: 'Finished' },{ value: 'playing', label: 'Playing' },{ value: 'backlog', label: 'Backlog' },{ value: 'paused', label: 'Paused' },{ value: 'dropped', label: 'Dropped' },{ value: 'replaying', label: 'Replaying' }]} />
                             </div>
 
                             <div className="flex items-center justify-end gap-2 pt-2">

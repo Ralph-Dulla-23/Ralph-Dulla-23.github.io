@@ -7,7 +7,7 @@ import { PixelTrail } from '@/components/ui/pixel-trail';
 import { useScreenSize } from '@/hooks/use-screen-size';
 import { useAuth } from '../context/AuthContext';
 import Typewriter from './ui/typewriter';
-import { lenisRef } from '../App';
+import { lenisRef } from '../lib/scrollController';
 
 const TYPEWRITER_LABELS = ['RD', 'RDeveloper', 'RDesigner'];
 

@@ -1,56 +1,33 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo, useSyncExternalStore, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getDiaryRepository } from '../lib/db';
+import { getSessionFeed, emptySessionSnapshot } from './sessionFeed';
 
 /**
- * Custom React hook for subscribing to canonical real-time diary sessions.
- *
- * @param {object} [filter] Optional filter options ({ mediaType, libraryItemId })
- * @returns {{ sessions: Array, loading: boolean, error: Error|null, metadata: object }}
+ * A shared, real-time canonical session feed. Screens receive filtered views
+ * without opening a separate Firestore listener for each tab or detail page.
  */
 export function useDiarySessions(filter = {}) {
     const { user } = useAuth();
-    const [sessions, setSessions] = useState([]);
-    const [loading, setLoading] = useState(Boolean(user?.uid));
-    const [error, setError] = useState(null);
-    const [metadata, setMetadata] = useState({ hasPendingWrites: false, fromCache: false });
-
-    // Memoize filter keys to prevent re-subscriptions on fresh object references
-    const memoFilter = useMemo(() => ({
-        mediaType: filter?.mediaType,
-        libraryItemId: filter?.libraryItemId,
-    }), [filter?.mediaType, filter?.libraryItemId]);
-
-    useEffect(() => {
-        if (!user?.uid) return;
-
-        const repository = getDiaryRepository(user.uid);
-        const unsubscribe = repository.observeSessions(
-            memoFilter,
-            (snapshot) => {
-                setSessions(snapshot.sessions || []);
-                setMetadata(snapshot.metadata || { hasPendingWrites: false, fromCache: false });
-                setLoading(false);
-            },
-            (err) => {
-                console.error('Failed to subscribe to canonical sessions:', err);
-                setError(err);
-                setLoading(false);
-            }
+    const uid = user?.uid;
+    const feed = useMemo(() => getSessionFeed(uid), [uid]);
+    const subscribe = useCallback((listener) => feed ? feed.subscribe(listener) : () => {}, [feed]);
+    const getSnapshot = useCallback(() => feed ? feed.snapshot() : emptySessionSnapshot, [feed]);
+    const current = useSyncExternalStore(subscribe, getSnapshot, () => emptySessionSnapshot);
+    const mediaType = filter?.mediaType;
+    const libraryItemId = filter?.libraryItemId;
+    const sessions = useMemo(() => {
+        if (!uid) return emptySessionSnapshot.sessions;
+        if (!mediaType && !libraryItemId) return current.sessions;
+        return current.sessions.filter((session) =>
+            (!mediaType || session.mediaType === mediaType) &&
+            (!libraryItemId || session.libraryItemId === libraryItemId || session.itemId === libraryItemId)
         );
-
-        return () => {
-            if (typeof unsubscribe === 'function') {
-                unsubscribe();
-            }
-        };
-    }, [user?.uid, memoFilter]);
-
+    }, [uid, current.sessions, mediaType, libraryItemId]);
     return {
-        sessions: user?.uid ? sessions : [],
-        loading: user?.uid ? loading : false,
-        error,
-        metadata,
+        sessions,
+        loading: Boolean(uid) && current.loading,
+        error: current.error,
+        metadata: current.metadata || { hasPendingWrites: false, fromCache: false },
     };
 }
 

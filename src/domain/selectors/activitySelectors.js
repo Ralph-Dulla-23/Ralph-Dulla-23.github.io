@@ -31,7 +31,7 @@ export function groupSessionsByLocalDate(sessions, timeZone = DEFAULT_TIMEZONE) 
 
     sessions.forEach((s) => {
         // Invariant: Non-daily historical aggregates must NEVER be interpolated into daily cells
-        if (!s || s.isDailySession === false) return;
+        if (!s || s.isDailySession === false || /^bookmory_/i.test(s.id || "") || s.source === "bookmory") return;
 
         const dateKey = toLocalDateKey(s.startedAt || s.date, timeZone);
         if (!dateKey) return;
@@ -56,7 +56,7 @@ export function groupSessionsByLocalDate(sessions, timeZone = DEFAULT_TIMEZONE) 
 export function getSessionsForDate(sessions, targetDateKey, timeZone = DEFAULT_TIMEZONE) {
     if (!Array.isArray(sessions) || !targetDateKey) return [];
     return sessions.filter((s) => {
-        if (!s || s.isDailySession === false) return false;
+        if (!s || s.isDailySession === false || /^bookmory_/i.test(s.id || "") || s.source === "bookmory") return false;
         const dateKey = toLocalDateKey(s.startedAt || s.date, timeZone);
         return dateKey === targetDateKey;
     });
