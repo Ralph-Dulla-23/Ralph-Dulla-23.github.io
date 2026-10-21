@@ -495,6 +495,9 @@ export async function saveGame(uid, gameData, privateReview = '') {
         }
     }
 
+    // Auto-project to public shelf
+    publishLibraryItem(safeUid, { ...baseFields, mediaType: 'game' }).catch(() => {});
+
     return gameId;
 }
 
@@ -533,6 +536,7 @@ export async function deleteGame(uid, gameId) {
             console.warn('Firestore game delete deferred (deleted locally):', err.message);
         }
     }
+    unpublishLibraryItem(safeUid, safeGameId).catch(() => {});
 }
 
 /**
@@ -702,6 +706,9 @@ export async function saveBook(uid, bookData, privateNotes) {
         }
     }
 
+    // Auto-project to public shelf
+    publishLibraryItem(safeUid, { ...baseFields, mediaType: 'book' }).catch(() => {});
+
     return bookId;
 }
 
@@ -791,6 +798,9 @@ export async function updateBookProgress(uid, bookId, currentPage, pages, status
             console.warn('Firestore progress sync deferred (saved locally):', err.message);
         }
     }
+
+    // Auto-project updated book progress to public shelf
+    publishLibraryItem(safeUid, { ...localBooks[safeBookId], mediaType: 'book' }).catch(() => {});
 }
 
 /**
@@ -919,6 +929,7 @@ export async function deleteBook(uid, bookId) {
             console.warn('Firestore book delete deferred (deleted locally):', err.message);
         }
     }
+    unpublishLibraryItem(safeUid, safeBookId).catch(() => {});
 }
 
 /**

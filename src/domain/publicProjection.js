@@ -42,8 +42,12 @@ export function toPublicShelfItem(item, publishOptions = {}) {
         hoursPlayed: typeof item.hoursPlayed === 'number' ? item.hoursPlayed : 0,
         pages: item.pages || item.progress?.total || null,
         currentPage: item.currentPage || item.progress?.current || 0,
-        progress: item.progress || null,
+        progress: typeof item.progress === 'number'
+            ? item.progress
+            : (Number(item.pages) > 0 ? Math.min(100, Math.round(((Number(item.currentPage) || 0) / Number(item.pages)) * 100)) : 0),
         favorite: Boolean(item.favorite),
+        coverId: item.coverId || null,
+        finishedOn: item.finishedOn || '',
         publishedAt: new Date().toISOString(),
     };
 }
