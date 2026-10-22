@@ -139,3 +139,106 @@ export function getSteamOnlineStatusConfig(state) {
             };
     }
 }
+
+/**
+ * Resolves a unified list of games by merging diary records with synced Steam stats.
+ * - Steam titles are enriched with verified hours, app IDs, and store URLs.
+ * - Owned Steam games with >= 1.0 hr playtime not yet in the diary are appended.
+ * - Sorted by recent activity (latest played / completed / updated first).
+ * @param {Array} [games=[]] User's diary games
+ * @param {object|null} [steamData=null] Synced Steam dataset
+ * @returns {Array} Unified game objects
+ */
+export function getUnifiedGames(games = [], steamData = null) {
+    const steamTitles = new Set();
+    const enriched = (Array.isArray(games) ? games : []).map((g) => {
+        const match = findSteamGameHours(g.title, steamData);
+        if (match) {
+            steamTitles.add(normalizeTitle(g.title));
+            return {
+                ...g,
+                isSteam: true,
+                steamAppId: match.appId,
+                hoursPlayed: Number(g.hoursPlayed) || match.hours || 0,
+                lastPlayedTimestamp: match.lastPlayedTimestamp || 0,
+                lastPlayed: match.lastPlayed || null,
+                storeUrl: match.appId ? `https://store.steampowered.com/app/${match.appId}` : null,
+            };
+        }
+        return g;
+    });
+
+    const pool = [
+        ...(Array.isArray(steamData?.ownedGamesSummary) ? steamData.ownedGamesSummary : []),
+        ...(Array.isArray(steamData?.recentGames) ? steamData.recentGames : []),
+    ];
+
+    const recentAppIds = new Set(
+        (Array.isArray(steamData?.recentGames) ? steamData.recentGames : []).map((g) => String(g.appId))
+    );
+
+    const seenAppIds = new Set(
+        enriched.filter((g) => g.steamAppId).map((g) => String(g.steamAppId))
+    );
+
+    const additionalSteamGames = [];
+    for (const sg of pool) {
+        const safeAppId = String(sg.appId);
+        const normTitle = normalizeTitle(sg.name);
+        const hours = Number(sg.playtimeForeverHours) || 0;
+        if (
+            safeAppId !== '480' &&
+            sg.name &&
+            sg.name !== 'Spacewar' &&
+            hours >= 1 &&
+            !seenAppIds.has(safeAppId) &&
+            !steamTitles.has(normTitle)
+        ) {
+            seenAppIds.add(safeAppId);
+            steamTitles.add(normTitle);
+            additionalSteamGames.push({
+                id: `steam-${safeAppId}`,
+                title: sg.name,
+                cover: sg.logoUrl || `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${safeAppId}/header.jpg`,
+                platform: 'Steam',
+                hoursPlayed: hours,
+                lastPlayedTimestamp: Number(sg.lastPlayedTimestamp) || 0,
+                lastPlayed: sg.lastPlayed || null,
+                isRecent: recentAppIds.has(safeAppId) || Boolean(sg.playtime2WkHours > 0),
+                rating: null,
+                status: hours > 0 ? 'playing' : 'backlog',
+                isSteam: true,
+                steamAppId: safeAppId,
+                storeUrl: sg.storeUrl || `https://store.steampowered.com/app/${safeAppId}`,
+                finishedOn: null,
+            });
+        }
+    }
+
+    const getActivityTime = (item) => {
+        if (item.lastPlayedTimestamp) return Number(item.lastPlayedTimestamp) * 1000;
+        if (item.finishedOn) {
+            const t = new Date(item.finishedOn).getTime();
+            if (!isNaN(t)) return t;
+        }
+        if (item.startedOn) {
+            const t = new Date(item.startedOn).getTime();
+            if (!isNaN(t)) return t;
+        }
+        if (item.updatedAt) {
+            const t = new Date(item.updatedAt?.toDate ? item.updatedAt.toDate() : item.updatedAt).getTime();
+            if (!isNaN(t)) return t;
+        }
+        return 0;
+    };
+
+    const all = [...enriched, ...additionalSteamGames];
+    all.sort((a, b) => {
+        const timeA = getActivityTime(a);
+        const timeB = getActivityTime(b);
+        if (timeB !== timeA) return timeB - timeA;
+        return (Number(b.hoursPlayed) || 0) - (Number(a.hoursPlayed) || 0);
+    });
+
+    return all;
+}

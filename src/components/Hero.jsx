@@ -1,9 +1,22 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { BsSteam } from 'react-icons/bs';
+import { loadSteamStats } from '../lib/steam';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
 import { lenisRef } from '../lib/scrollController';
 
 const Hero = () => {
     const animRef = useScrollAnimation({ threshold: 0.1 });
+    const [steam, setSteam] = useState(null);
+
+    useEffect(() => {
+        let mounted = true;
+        loadSteamStats().then((data) => {
+            if (mounted && data) setSteam(data);
+        }).catch(() => {});
+        return () => {
+            mounted = false;
+        };
+    }, []);
 
     const scrollToProjects = (e) => {
         e.preventDefault();
@@ -46,6 +59,31 @@ const Hero = () => {
                         <p className="text-lg text-secondary dark:text-gray-400 font-medium mt-2">
                             Computer Science Student & Developer
                         </p>
+                        {steam && (steam.onlineState === 'in-game' || steam.onlineState === 'online') && (
+                            <div className="mt-3 flex justify-center md:justify-start">
+                                <a
+                                    href={steam.profileUrl || 'https://steamcommunity.com/profiles/76561198417375364/'}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label="Steam profile & activity"
+                                    className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border transition-colors shadow-sm ${
+                                        steam.onlineState === 'in-game'
+                                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover:border-emerald-300'
+                                            : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:border-blue-300'
+                                    }`}
+                                >
+                                    <span className={`w-2 h-2 rounded-full ${steam.onlineState === 'in-game' ? 'bg-emerald-500 animate-pulse' : 'bg-blue-500'}`} />
+                                    <BsSteam className="w-3.5 h-3.5" />
+                                    {steam.onlineState === 'in-game' ? (
+                                        <span>
+                                            Playing <strong className="font-semibold text-emerald-900 dark:text-emerald-100">{steam.currentGame || (steam.stateMessage || '').replace(/^Playing\s+/i, '')}</strong> on Steam
+                                        </span>
+                                    ) : (
+                                        <span>Online on Steam</span>
+                                    )}
+                                </a>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex flex-wrap gap-y-8 gap-x-6 justify-center md:justify-start items-center">

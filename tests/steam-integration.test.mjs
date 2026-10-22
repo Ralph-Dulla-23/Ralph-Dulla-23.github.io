@@ -10,6 +10,7 @@ import {
     getSteamOnlineStatusConfig,
     DEFAULT_STEAM_ID,
     DEFAULT_PROFILE_URL,
+    getUnifiedGames,
 } from '../src/lib/steam.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -123,4 +124,39 @@ test('Steam Integration: public/data/steam-stats.json exists and is valid', () =
     assert.equal(content.profileUrl, DEFAULT_PROFILE_URL);
     assert.ok(content.personaName, 'Must have a persona name');
     assert.ok(Array.isArray(content.recentGames), 'Must have recentGames array');
+});
+
+test('Steam Integration: getUnifiedGames filters < 1hr, enriches, and sorts by recent activity', () => {
+    const mockDiaryGames = [
+        { id: 'diary-1', title: 'Terraria', hoursPlayed: '50', finishedOn: '2026-05-01' },
+    ];
+    const mockSteamData = {
+        recentGames: [
+            { appId: '552500', name: 'Warhammer: Vermintide 2', playtimeForeverHours: 16.8, lastPlayedTimestamp: 1729550000 },
+        ],
+        ownedGamesSummary: [
+            { appId: '105600', name: 'Terraria', playtimeForeverHours: 76.2, lastPlayedTimestamp: 1725700000 },
+            { appId: '1304930', name: 'The Outlast Trials', playtimeForeverHours: 36, lastPlayedTimestamp: 1729500000 },
+            { appId: '999999', name: 'Zero Hours Game', playtimeForeverHours: 0.5, lastPlayedTimestamp: 1729400000 },
+        ],
+    };
+
+    const unified = getUnifiedGames(mockDiaryGames, mockSteamData);
+
+    // Excludes < 1 hour game
+    assert.equal(unified.some(g => g.name === 'Zero Hours Game' || g.title === 'Zero Hours Game'), false);
+
+    // Enriches Terraria from steamData
+    const terraria = unified.find(g => g.title === 'Terraria');
+    assert.ok(terraria);
+    assert.equal(terraria.isSteam, true);
+    assert.equal(terraria.steamAppId, '105600');
+
+    // Sort order: Vermintide 2 (1729550000) > Outlast Trials (1729500000) > Terraria (1725700000)
+    assert.equal(unified[0].title, 'Warhammer: Vermintide 2');
+    assert.equal(unified[1].title, 'The Outlast Trials');
+    assert.equal(unified[2].title, 'Terraria');
+
+    // Null safety
+    assert.deepEqual(getUnifiedGames([], null), []);
 });
