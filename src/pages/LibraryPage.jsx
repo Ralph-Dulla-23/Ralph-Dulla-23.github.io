@@ -311,10 +311,12 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
         for (const sg of pool) {
             const safeAppId = String(sg.appId);
             const normTitle = normalizeTitle(sg.name);
+            const hours = Number(sg.playtimeForeverHours) || 0;
             if (
                 safeAppId !== '480' &&
                 sg.name &&
                 sg.name !== 'Spacewar' &&
+                hours >= 1 &&
                 !seenAppIds.has(safeAppId) &&
                 !steamTitles.has(normTitle)
             ) {

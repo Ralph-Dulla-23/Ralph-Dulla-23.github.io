@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-22T06:03:47.288Z",
+  "updatedAt": "2026-10-22T07:08:03.049Z",
   "steamId64": "76561198417375364",
   "personaName": "Liz Buxbaum",
   "realName": "SimpingKato",
@@ -64,32 +64,11 @@
       "storeUrl": "https://store.steampowered.com/app/4000"
     },
     {
-      "appId": "35720",
-      "name": "Trine 2",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/35720/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/35720"
-    },
-    {
       "appId": "43160",
       "name": "Metro: Last Light Complete Edition",
       "playtimeForeverHours": 8.2,
       "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/43160/header.jpg",
       "storeUrl": "https://store.steampowered.com/app/43160"
-    },
-    {
-      "appId": "49520",
-      "name": "Borderlands 2",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/49520/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/49520"
-    },
-    {
-      "appId": "70000",
-      "name": "Dino D-Day",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/70000/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/70000"
     },
     {
       "appId": "105600",
@@ -113,13 +92,6 @@
       "storeUrl": "https://store.steampowered.com/app/230410"
     },
     {
-      "appId": "238960",
-      "name": "Path of Exile",
-      "playtimeForeverHours": 0.5,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/238960/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/238960"
-    },
-    {
       "appId": "244210",
       "name": "Assetto Corsa",
       "playtimeForeverHours": 3.6,
@@ -127,39 +99,11 @@
       "storeUrl": "https://store.steampowered.com/app/244210"
     },
     {
-      "appId": "250900",
-      "name": "The Binding of Isaac: Rebirth",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/250900/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/250900"
-    },
-    {
-      "appId": "286690",
-      "name": "Metro 2033 Redux",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/286690/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/286690"
-    },
-    {
       "appId": "291550",
       "name": "Brawlhalla",
       "playtimeForeverHours": 13.1,
       "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/291550/header.jpg",
       "storeUrl": "https://store.steampowered.com/app/291550"
-    },
-    {
-      "appId": "304930",
-      "name": "Unturned",
-      "playtimeForeverHours": 0.1,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/304930/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/304930"
-    },
-    {
-      "appId": "375950",
-      "name": "Viridi",
-      "playtimeForeverHours": 0.6,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/375950/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/375950"
     },
     {
       "appId": "424840",
@@ -181,20 +125,6 @@
       "playtimeForeverHours": 2.9,
       "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/433340/header.jpg",
       "storeUrl": "https://store.steampowered.com/app/433340"
-    },
-    {
-      "appId": "438100",
-      "name": "VRChat",
-      "playtimeForeverHours": 0.2,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/438100/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/438100"
-    },
-    {
-      "appId": "461040",
-      "name": "PICO PARK:Classic Edition",
-      "playtimeForeverHours": 0.7,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/461040/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/461040"
     },
     {
       "appId": "503560",
@@ -225,20 +155,6 @@
       "storeUrl": "https://store.steampowered.com/app/578080"
     },
     {
-      "appId": "582660",
-      "name": "Black Desert",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/582660/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/582660"
-    },
-    {
-      "appId": "606150",
-      "name": "Moonlighter",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/606150/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/606150"
-    },
-    {
       "appId": "607260",
       "name": "McOsu",
       "playtimeForeverHours": 14.6,
@@ -246,39 +162,11 @@
       "storeUrl": "https://store.steampowered.com/app/607260"
     },
     {
-      "appId": "613100",
-      "name": "House Flipper",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/613100/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/613100"
-    },
-    {
       "appId": "632360",
       "name": "Risk of Rain 2",
       "playtimeForeverHours": 10,
       "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/632360/header.jpg",
       "storeUrl": "https://store.steampowered.com/app/632360"
-    },
-    {
-      "appId": "645630",
-      "name": "Car Mechanic Simulator 2018",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/645630/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/645630"
-    },
-    {
-      "appId": "646910",
-      "name": "The Crew 2",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/646910/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/646910"
-    },
-    {
-      "appId": "680360",
-      "name": "Regions Of Ruin",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/680360/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/680360"
     },
     {
       "appId": "700330",
@@ -293,20 +181,6 @@
       "playtimeForeverHours": 15.4,
       "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/714010/header.jpg",
       "storeUrl": "https://store.steampowered.com/app/714010"
-    },
-    {
-      "appId": "738520",
-      "name": "Breathedge",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/738520/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/738520"
-    },
-    {
-      "appId": "871720",
-      "name": "Ultimate Custom Night",
-      "playtimeForeverHours": 0.2,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/871720/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/871720"
     },
     {
       "appId": "960090",
@@ -372,13 +246,6 @@
       "storeUrl": "https://store.steampowered.com/app/1289310"
     },
     {
-      "appId": "1290490",
-      "name": "UNBEATABLE [white label]",
-      "playtimeForeverHours": 0.6,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1290490/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/1290490"
-    },
-    {
       "appId": "1293830",
       "name": "Forza Horizon 4",
       "playtimeForeverHours": 104.6,
@@ -393,60 +260,11 @@
       "storeUrl": "https://store.steampowered.com/app/1304930"
     },
     {
-      "appId": "1325860",
-      "name": "VTube Studio",
-      "playtimeForeverHours": 0.9,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1325860/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/1325860"
-    },
-    {
-      "appId": "1422450",
-      "name": "Deadlock",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1422450/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/1422450"
-    },
-    {
-      "appId": "1456200",
-      "name": "Initial Drift Online",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1456200/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/1456200"
-    },
-    {
-      "appId": "1608450",
-      "name": "Hellslave",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1608450/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/1608450"
-    },
-    {
-      "appId": "1611740",
-      "name": "BattleBit Remastered Playtest",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1611740/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/1611740"
-    },
-    {
       "appId": "1625450",
       "name": "Muck",
       "playtimeForeverHours": 2.7,
       "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1625450/header.jpg",
       "storeUrl": "https://store.steampowered.com/app/1625450"
-    },
-    {
-      "appId": "1671340",
-      "name": "Fears to Fathom - Episode 1",
-      "playtimeForeverHours": 0.5,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1671340/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/1671340"
-    },
-    {
-      "appId": "1712840",
-      "name": "Tiny Tina's Assault on Dragon Keep: A Wonderlands One-shot Adventure",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1712840/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/1712840"
     },
     {
       "appId": "1714320",
@@ -484,46 +302,11 @@
       "storeUrl": "https://store.steampowered.com/app/1977530"
     },
     {
-      "appId": "2021910",
-      "name": "FPS Chess",
-      "playtimeForeverHours": 0.2,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2021910/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/2021910"
-    },
-    {
       "appId": "2073850",
       "name": "THE FINALS",
       "playtimeForeverHours": 11.3,
       "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2073850/header.jpg",
       "storeUrl": "https://store.steampowered.com/app/2073850"
-    },
-    {
-      "appId": "2074920",
-      "name": "The First Descendant",
-      "playtimeForeverHours": 0.5,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2074920/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/2074920"
-    },
-    {
-      "appId": "2139460",
-      "name": "Once Human",
-      "playtimeForeverHours": 0.8,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2139460/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/2139460"
-    },
-    {
-      "appId": "2149010",
-      "name": "Little Nightmares Enhanced Edition",
-      "playtimeForeverHours": 0,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2149010/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/2149010"
-    },
-    {
-      "appId": "2551020",
-      "name": "One-armed robber",
-      "playtimeForeverHours": 0.2,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2551020/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/2551020"
     },
     {
       "appId": "2709570",
@@ -552,13 +335,6 @@
       "playtimeForeverHours": 1.7,
       "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3564740/header.jpg",
       "storeUrl": "https://store.steampowered.com/app/3564740"
-    },
-    {
-      "appId": "3678970",
-      "name": "TBH: Task Bar Hero",
-      "playtimeForeverHours": 0.2,
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3678970/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/3678970"
     }
   ],
   "source": "steam_web_api"

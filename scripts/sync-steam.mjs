@@ -196,7 +196,7 @@ async function fetchViaSteamApi(key, id) {
         totalHours: Math.round(totalHours * 10) / 10,
         recentGames,
         ownedGamesSummary: ownedGames
-            .filter(g => String(g.appid) !== '480' && g.name)
+            .filter(g => String(g.appid) !== '480' && g.name && Math.round(((g.playtime_forever || 0) / 60) * 10) / 10 >= 1.0)
             .map(g => ({
                 appId: String(g.appid),
                 name: g.name,
