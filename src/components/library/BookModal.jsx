@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import { Icons } from './Icons';
 import { Stars } from './BookCard';
 import { statusConfig } from '../../data/books';
-import bookDescriptions from '../../data/bookDescriptions.js';
+import { getBookSynopsis } from '../../data/bookDescriptions.js';
 
 const OPEN_DURATION = 280;
 const CLOSE_DURATION = 220;
@@ -169,7 +169,7 @@ const BookModal = ({ book, origin = null, onClose }) => {
     const totalPages = book.pages || null;
     const readPages = book.currentPage || (book.status === 'completed' ? totalPages : 0);
 
-    const synopsis = book.description || bookDescriptions[book.id] || bookDescriptions[String(book.coverId)] || book.summary || '';
+    const synopsis = getBookSynopsis(book);
 
     const handleBackdropClick = (e) => {
         if (e.target === backdropRef.current) {
