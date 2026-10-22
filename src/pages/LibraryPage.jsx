@@ -2,10 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import Lenis from 'lenis';
-import { statusConfig } from '../data/books';
 import GenreFilter from '../components/library/GenreFilter';
 import { observePublicShelf } from '../services/publicShelfService';
-import { OWNER_UID } from '../lib/config';
+import { OWNER_UID, isFirebaseConfigured } from '../lib/config';
+import fallbackBooks from '../data/books';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -23,9 +23,15 @@ import { Icons } from '../components/library/Icons';
 import BookCard from '../components/library/BookCard';
 import { StatCard, ProgressRing } from '../components/library/Stats';
 import BookModal from '../components/library/BookModal';
+import SteamShowcaseCard from '../components/steam/SteamShowcaseCard';
 import {
     BsController,
     BsBook,
+    BsBookHalf,
+    BsCheckCircleFill,
+    BsBookmarkHeart,
+    BsPauseCircle,
+    BsHeartFill,
     BsStarFill,
     BsClock,
     BsCalendarCheck,
@@ -33,6 +39,65 @@ import {
     BsArrowRight,
     BsBarChart,
 } from 'react-icons/bs';
+
+const BOOK_CATEGORIES = [
+    {
+        key: 'reading',
+        title: 'Reading',
+        match: (b) => b.status === 'reading',
+        icon: <BsBookHalf className="w-4 h-4 text-blue-500" />,
+        badgeColor: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/60',
+    },
+    {
+        key: 'completed',
+        title: 'Read',
+        match: (b) => b.status === 'completed',
+        icon: <BsCheckCircleFill className="w-4 h-4 text-emerald-500" />,
+        badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60',
+    },
+    {
+        key: 'want-to-read',
+        title: 'To be Read',
+        match: (b) => b.status === 'want-to-read',
+        icon: <BsBookmarkHeart className="w-4 h-4 text-purple-500" />,
+        badgeColor: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/60',
+    },
+    {
+        key: 'dropped',
+        title: 'Dropped',
+        match: (b) => b.status === 'dropped' || !['reading', 'completed', 'want-to-read'].includes(b.status),
+        icon: <BsPauseCircle className="w-4 h-4 text-rose-500" />,
+        badgeColor: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60',
+    },
+];
+
+const SINGLE_FILTER_META = {
+    reading: {
+        title: 'Reading',
+        icon: <BsBookHalf className="w-4 h-4 text-blue-500" />,
+        badgeColor: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/60',
+    },
+    completed: {
+        title: 'Read',
+        icon: <BsCheckCircleFill className="w-4 h-4 text-emerald-500" />,
+        badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60',
+    },
+    'want-to-read': {
+        title: 'To be Read',
+        icon: <BsBookmarkHeart className="w-4 h-4 text-purple-500" />,
+        badgeColor: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/60',
+    },
+    dropped: {
+        title: 'Dropped',
+        icon: <BsPauseCircle className="w-4 h-4 text-rose-500" />,
+        badgeColor: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60',
+    },
+    favorites: {
+        title: 'Favorites',
+        icon: <BsHeartFill className="w-4 h-4 text-pink-500" />,
+        badgeColor: 'bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-950/40 dark:text-pink-300 dark:border-pink-800/60',
+    },
+};
 
 const getRatingColor = (score) => {
     if (score >= 9) return '#10b981';
@@ -73,6 +138,27 @@ CustomChartTooltip.propTypes = {
 };
 
 /**
+ * Resolves context-aware candidate book pool for the random picker.
+ * - Base candidate pool: books where status === 'reading' || status === 'want-to-read'.
+ * - If genreFilter is active (truthy and not 'all'): filter candidate pool strictly by that genre.
+ * - If no books match the filtered pool, gracefully fall back to all reading/to-read books.
+ */
+function getCandidateBooks(books, genreFilter) {
+    const basePool = (books || []).filter(
+        (b) => b.status === 'reading' || b.status === 'want-to-read'
+    );
+    if (genreFilter && genreFilter !== 'all') {
+        const filteredPool = basePool.filter(
+            (b) => b.genre === genreFilter || (Array.isArray(b.genres) && b.genres.includes(genreFilter))
+        );
+        if (filteredPool.length > 0) {
+            return filteredPool;
+        }
+    }
+    return basePool;
+}
+
+/**
  * LibraryPage component that displays the user's reading collection, finished games, and stats.
  */
 const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
@@ -100,7 +186,6 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
     const pickRef = useScrollAnimation();
     const filterRef = useScrollAnimation();
     const gridRef = useScrollAnimation();
-    const readingRef = useScrollAnimation();
     const footerRef = useScrollAnimation();
     const gameStatsRef = useScrollAnimation();
 
@@ -119,7 +204,12 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
             setGamesLoading(false);
             setShelfError(null);
         }, (error) => {
-            setShelfError(error?.code || error?.message || 'Could not load published shelf');
+            if (!isFirebaseConfigured()) {
+                setBooks(fallbackBooks);
+                setShelfError(null);
+            } else {
+                setShelfError(error?.code || error?.message || 'Could not load published shelf');
+            }
             setGamesLoading(false);
         });
         return () => unsubscribe();
@@ -179,7 +269,7 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
     });
 
     const pickRandom = () => {
-        const pool = books.filter(b => b.status === 'want-to-read' || b.status === 'reading');
+        const pool = getCandidateBooks(books, genreFilter);
         if (pool.length) setSelectedBook(pool[Math.floor(Math.random() * pool.length)]);
     };
 
@@ -465,8 +555,9 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                                 {[
                                     { key: 'all', label: 'All Books' },
                                     { key: 'reading', label: 'Reading' },
-                                    { key: 'completed', label: 'Completed' },
-                                    { key: 'want-to-read', label: 'Want to Read' },
+                                    { key: 'completed', label: 'Read' },
+                                    { key: 'want-to-read', label: 'To be Read' },
+                                    { key: 'dropped', label: 'Dropped' },
                                     { key: 'favorites', label: 'Favorites' },
                                 ].map((f) => (
                                     <button
@@ -486,56 +577,64 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                             <GenreFilter books={books} value={genreFilter} onChange={setGenreFilter} />
                         </section>
 
-                        {/* Book Grid */}
-                        <section className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4" ref={gridRef} data-animate>
-                            {filteredBooks.map((book, i) => (
-                                <BookCard key={book.id || i} book={book} onClick={setSelectedBook} />
-                            ))}
-                            {filteredBooks.length === 0 && (
-                                <p className="col-span-full text-center text-secondary dark:text-gray-400 py-12 text-sm">
+                        {/* Book Grid / Categorized Shelves */}
+                        <div ref={gridRef} data-animate className="space-y-12">
+                            {filteredBooks.length === 0 ? (
+                                <p className="text-center text-secondary dark:text-gray-400 py-12 text-sm">
                                     No books match this filter
                                 </p>
-                            )}
-                        </section>
-
-                        {/* Currently Reading List */}
-                        {readingBooks.length > 0 && (
-                            <section className="mt-14" ref={readingRef} data-animate>
-                                <h3 className="text-sm font-display font-semibold text-primary dark:text-gray-100 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <span className="text-blue-500">{Icons.bookOpen('w-4 h-4')}</span>
-                                    Currently Reading
-                                </h3>
-                                <div className="space-y-3">
-                                    {readingBooks.map((book, i) => {
-                                        const config = statusConfig[book.status] || { barColor: 'bg-blue-500' };
-                                        const coverSrc = book.cover || (book.coverId ? `https://covers.openlibrary.org/b/id/${book.coverId}-M.jpg` : '');
-                                        return (
-                                            <div
-                                                key={book.id || i}
-                                                onClick={() => setSelectedBook(book)}
-                                                className="flex items-center gap-4 bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-all cursor-pointer"
-                                            >
-                                                <div className="w-14 h-20 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0">
-                                                    {coverSrc ? (
-                                                        <img src={coverSrc} alt={book.title} className="w-full h-full object-cover" loading="lazy" />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-xs">{book.title}</div>
-                                                    )}
+                            ) : filter === 'all' ? (
+                                BOOK_CATEGORIES.map((cat) => {
+                                    const sectionBooks = filteredBooks.filter(cat.match);
+                                    if (sectionBooks.length === 0) return null;
+                                    return (
+                                        <section key={cat.key} className="space-y-4">
+                                            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
+                                                <div className="flex items-center gap-2.5">
+                                                    <span className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                                                        {cat.icon}
+                                                    </span>
+                                                    <h3 className="text-base sm:text-lg font-display font-semibold text-primary dark:text-gray-100 tracking-tight">
+                                                        {cat.title}
+                                                    </h3>
+                                                    <span className={`text-xs px-2.5 py-0.5 rounded-full border font-medium ${cat.badgeColor}`}>
+                                                        {sectionBooks.length}
+                                                    </span>
                                                 </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-semibold text-primary dark:text-gray-100 truncate">{book.title}</p>
-                                                    <p className="text-xs text-secondary dark:text-gray-400">{book.author}</p>
-                                                    <div className="mt-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                                        <div className={`h-full rounded-full ${config.barColor}`} style={{ width: `${book.progress || 0}%` }} />
-                                                    </div>
-                                                </div>
-                                                <span className="text-sm font-display font-bold text-blue-500">{book.progress || 0}%</span>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            </section>
-                        )}
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                                {sectionBooks.map((book, i) => (
+                                                    <BookCard key={book.id || i} book={book} onClick={setSelectedBook} />
+                                                ))}
+                                            </div>
+                                        </section>
+                                    );
+                                })
+                            ) : (
+                                <section className="space-y-4">
+                                    {SINGLE_FILTER_META[filter] && (
+                                        <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
+                                            <div className="flex items-center gap-2.5">
+                                                <span className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                                                    {SINGLE_FILTER_META[filter].icon}
+                                                </span>
+                                                <h3 className="text-base sm:text-lg font-display font-semibold text-primary dark:text-gray-100 tracking-tight">
+                                                    {SINGLE_FILTER_META[filter].title}
+                                                </h3>
+                                                <span className={`text-xs px-2.5 py-0.5 rounded-full border font-medium ${SINGLE_FILTER_META[filter].badgeColor}`}>
+                                                    {filteredBooks.length}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                        {filteredBooks.map((book, i) => (
+                                            <BookCard key={book.id || i} book={book} onClick={setSelectedBook} />
+                                        ))}
+                                    </div>
+                                </section>
+                            )}
+                        </div>
                     </div>
 
                     {/* Games Tab */}
@@ -547,6 +646,9 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                             <StatCard icon={<BsStarFill className="w-6 h-6 text-amber-400" />} label="Avg Rating" value={`${avgGameRating} / 10`} />
                             <StatCard icon={<BsLaptop className="w-6 h-6 text-emerald-500" />} label="Platforms" value={allPlatforms.length || 1} />
                         </section>
+
+                        {/* Steam Live Profile & Activity */}
+                        <SteamShowcaseCard className="mb-10" />
 
                         {/* Gaming Analytics & Visualizations */}
                         <section className="mb-10 space-y-6">

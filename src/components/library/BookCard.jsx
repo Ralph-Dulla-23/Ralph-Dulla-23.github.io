@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Icons } from './Icons';
 import { statusConfig } from '../../data/books';
 
@@ -16,6 +16,7 @@ export const Stars = ({ rating }) => {
 };
 
 const BookCard = ({ book, onClick }) => {
+    const [imageError, setImageError] = useState(false);
     const config = statusConfig[book.status] || {
         label: book.status === 'want-to-read' ? 'To Read' : (book.status || 'Book'),
         color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
@@ -26,18 +27,26 @@ const BookCard = ({ book, onClick }) => {
     const visibleGenres = genres.slice(0, 3);
     const remainingGenres = Math.max(0, genres.length - visibleGenres.length);
 
+    // Reset error state if coverSrc changes
+    const [prevCoverSrc, setPrevCoverSrc] = useState(coverSrc);
+    if (prevCoverSrc !== coverSrc) {
+        setPrevCoverSrc(coverSrc);
+        setImageError(false);
+    }
+
     return (
         <div
             onClick={() => onClick(book)}
             className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
         >
             <div className="relative w-full aspect-[2/3] bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                {coverSrc ? (
+                {coverSrc && !imageError ? (
                     <img
                         src={coverSrc}
                         alt={book.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         loading="lazy"
+                        onError={() => setImageError(true)}
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center p-4">

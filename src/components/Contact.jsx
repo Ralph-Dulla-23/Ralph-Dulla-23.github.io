@@ -32,7 +32,7 @@ const Contact = () => {
     const isSending = status === 'sending';
 
     return (
-        <section id="contact" className="py-12 flex flex-col items-center text-center" ref={animRef} data-animate>
+        <section id="contact" className="scroll-mt-20 py-12 flex flex-col items-center text-center" ref={animRef} data-animate>
             <div className="mb-6">
                 <h2 className="text-lg font-display font-semibold text-primary dark:text-gray-100 uppercase tracking-wider mb-2">Get in Touch</h2>
                 <p className="text-secondary dark:text-gray-400 text-sm max-w-sm mx-auto">

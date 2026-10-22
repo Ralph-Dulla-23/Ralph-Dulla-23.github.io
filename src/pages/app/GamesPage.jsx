@@ -16,6 +16,7 @@ import {
     calculateGameStats,
 } from '../../lib/db';
 import { searchGames } from '../../lib/rawg';
+import { loadSteamStats, findSteamGameHours } from '../../lib/steam';
 import {
     BsPlusLg,
     BsStarFill,
@@ -25,6 +26,7 @@ import {
     BsPencilSquare,
     BsSearch,
     BsLockFill,
+    BsSteam,
 } from 'react-icons/bs';
 
 const statusTabs = [
@@ -60,6 +62,8 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
     const [cover, setCover] = useState('');
     const [privateReview, setPrivateReview] = useState('');
     const [saving, setSaving] = useState(false);
+    const [steamSyncMsg, setSteamSyncMsg] = useState('');
+    const [syncingSteam, setSyncingSteam] = useState(false);
     const editSignature = JSON.stringify([title, platform, status, genres, hoursPlayed, rating, finishedOn, cover, privateReview]);
     const closeEditorNow = useCallback(() => setIsModalOpen(false), []);
     const draftGuard = useEditorDraftGuard(isModalOpen, editSignature, closeEditorNow);
@@ -142,6 +146,7 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
         setFinishedOn(new Date().toISOString().split('T')[0]);
         setCover('');
         setPrivateReview('');
+        setSteamSyncMsg('');
         setSearchQuery('');
         setSearchResults([]);
         setHasSearched(false);
@@ -173,6 +178,7 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
                 setPrivateReview(review);
             } catch {
                 setPrivateReview('');
+        setSteamSyncMsg('');
             }
         }
         setIsModalOpen(true);
@@ -234,6 +240,13 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
         }
         if (game.rawgId) setRawgId(game.rawgId);
         if (game.released) setReleased(game.released);
+        loadSteamStats().then((steamStats) => {
+            const match = findSteamGameHours(game.title, steamStats);
+            if (match && typeof match.hours === 'number') {
+                setHoursPlayed(String(match.hours));
+                setSteamSyncMsg(`Auto-filled from Steam: ${match.hours} hrs`);
+            }
+        }).catch(() => {});
         if (game.genres?.length) {
             setGenres(game.genres.join(', '));
         }
@@ -241,6 +254,28 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
         setSearchResults([]);
         setHasSearched(false);
     };
+
+    const handleSyncSteamHours = useCallback(async () => {
+        if (!title.trim()) {
+            setSteamSyncMsg('Enter game title first');
+            return;
+        }
+        setSyncingSteam(true);
+        try {
+            const stats = await loadSteamStats(true);
+            const match = findSteamGameHours(title, stats);
+            if (match && typeof match.hours === 'number') {
+                setHoursPlayed(String(match.hours));
+                setSteamSyncMsg(`Steam match: ${match.hours} hrs (${match.name})`);
+            } else {
+                setSteamSyncMsg('No match found in synced Steam activity');
+            }
+        } catch {
+            setSteamSyncMsg('Unable to load Steam stats');
+        } finally {
+            setSyncingSteam(false);
+        }
+    }, [title]);
 
     const handleSave = async (e) => {
         e.preventDefault();
@@ -633,7 +668,9 @@ const GamesPage = ({ darkMode, setDarkMode }) => {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-secondary dark:text-gray-400 mb-1">
-                                        Hours Played
+                                        <span>Hours Played</span>
+                                        <button type="button" onClick={handleSyncSteamHours} disabled={syncingSteam} className="float-right text-[10px] text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 cursor-pointer font-medium" title="Auto-fill hours from your synced Steam stats"><BsSteam className="w-2.5 h-2.5" />{syncingSteam ? 'Checking...' : 'Sync Steam'}</button>
+                                        {steamSyncMsg && <span className="block text-[10px] text-emerald-600 dark:text-emerald-400 font-normal mt-0.5">{steamSyncMsg}</span>}
                                     </label>
                                     <input
                                         type="number"

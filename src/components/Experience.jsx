@@ -100,7 +100,7 @@ const Experience = () => {
     const timelineRef = useScrollAnimation();
 
     return (
-        <section id="experience" className="py-8 border-b border-border dark:border-gray-800">
+        <section id="experience" className="scroll-mt-20 py-8 border-b border-border dark:border-gray-800">
             <div className="grid grid-cols-1 md:grid-cols-1 gap-10">
                 {/* Core Skills Column */}
                 <div ref={skillsRef} data-animate>

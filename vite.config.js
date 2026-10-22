@@ -39,7 +39,9 @@ export default defineConfig({
         chunkFileNames:  'assets/[name]-[hash].js',
         entryFileNames:  'assets/[name]-[hash].js',
         manualChunks: {
-          'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+          'firebase-auth': ['firebase/auth'],
+          'firebase-firestore': ['firebase/firestore'],
+          're2js': ['re2js'],
           'recharts-vendor': ['recharts'],
         },
       },

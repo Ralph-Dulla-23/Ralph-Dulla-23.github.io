@@ -1,0 +1,426 @@
+{
+  "updatedAt": "2026-10-22T05:40:40.478Z",
+  "steamId64": "76561198417375364",
+  "personaName": "Liz Buxbaum",
+  "realName": "SimpingKato",
+  "profileUrl": "https://steamcommunity.com/profiles/76561198417375364/",
+  "onlineState": "online",
+  "stateMessage": "Online",
+  "avatarUrl": "https://avatars.steamstatic.com/6afecbb25e5641aa4bcfd1ea6128ef4b149e4d40_full.jpg",
+  "memberSince": "September 2017",
+  "summary": "",
+  "hoursPlayed2Wk": 11.4,
+  "totalGames": 74,
+  "totalHours": 869,
+  "recentGames": [
+    {
+      "appId": "1304930",
+      "name": "The Outlast Trials",
+      "playtime2WkHours": 10.6,
+      "playtimeForeverHours": 36,
+      "iconUrl": "https://media.steampowered.com/steamcommunity/public/images/apps/1304930/159a7d66ffd179c920eefe07392e6a261e899965.jpg",
+      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1304930/header.jpg",
+      "storeUrl": "https://store.steampowered.com/app/1304930"
+    },
+    {
+      "appId": "552500",
+      "name": "Warhammer: Vermintide 2",
+      "playtime2WkHours": 0.8,
+      "playtimeForeverHours": 16.8,
+      "iconUrl": "https://media.steampowered.com/steamcommunity/public/images/apps/552500/a671f2ddf7359beba9702ac097baf6d50cb07202.jpg",
+      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/552500/header.jpg",
+      "storeUrl": "https://store.steampowered.com/app/552500"
+    },
+    {
+      "appId": "480",
+      "name": "Spacewar",
+      "playtime2WkHours": 0.1,
+      "playtimeForeverHours": 197.6,
+      "iconUrl": "",
+      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/480/header.jpg",
+      "storeUrl": "https://store.steampowered.com/app/480"
+    },
+    {
+      "appId": "548430",
+      "name": "Deep Rock Galactic",
+      "playtime2WkHours": 0,
+      "playtimeForeverHours": 55,
+      "iconUrl": "https://media.steampowered.com/steamcommunity/public/images/apps/548430/e033e23c29a192a17c16a7645a2b423ac64ff447.jpg",
+      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/548430/header.jpg",
+      "storeUrl": "https://store.steampowered.com/app/548430"
+    }
+  ],
+  "ownedGamesSummary": [
+    {
+      "appId": "550",
+      "name": "Left 4 Dead 2",
+      "playtimeForeverHours": 61.9
+    },
+    {
+      "appId": "730",
+      "name": "Counter-Strike 2",
+      "playtimeForeverHours": 72.4
+    },
+    {
+      "appId": "4000",
+      "name": "Garry's Mod",
+      "playtimeForeverHours": 2.5
+    },
+    {
+      "appId": "35720",
+      "name": "Trine 2",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "43160",
+      "name": "Metro: Last Light Complete Edition",
+      "playtimeForeverHours": 8.2
+    },
+    {
+      "appId": "49520",
+      "name": "Borderlands 2",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "70000",
+      "name": "Dino D-Day",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "105600",
+      "name": "Terraria",
+      "playtimeForeverHours": 76.2
+    },
+    {
+      "appId": "219990",
+      "name": "Grim Dawn",
+      "playtimeForeverHours": 14.8
+    },
+    {
+      "appId": "230410",
+      "name": "Warframe",
+      "playtimeForeverHours": 13.2
+    },
+    {
+      "appId": "238960",
+      "name": "Path of Exile",
+      "playtimeForeverHours": 0.5
+    },
+    {
+      "appId": "244210",
+      "name": "Assetto Corsa",
+      "playtimeForeverHours": 3.6
+    },
+    {
+      "appId": "250900",
+      "name": "The Binding of Isaac: Rebirth",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "286690",
+      "name": "Metro 2033 Redux",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "291550",
+      "name": "Brawlhalla",
+      "playtimeForeverHours": 13.1
+    },
+    {
+      "appId": "304930",
+      "name": "Unturned",
+      "playtimeForeverHours": 0.1
+    },
+    {
+      "appId": "375950",
+      "name": "Viridi",
+      "playtimeForeverHours": 0.6
+    },
+    {
+      "appId": "424840",
+      "name": "Little Nightmares",
+      "playtimeForeverHours": 5.2
+    },
+    {
+      "appId": "431960",
+      "name": "Wallpaper Engine",
+      "playtimeForeverHours": 10.6
+    },
+    {
+      "appId": "433340",
+      "name": "Slime Rancher",
+      "playtimeForeverHours": 2.9
+    },
+    {
+      "appId": "438100",
+      "name": "VRChat",
+      "playtimeForeverHours": 0.2
+    },
+    {
+      "appId": "461040",
+      "name": "PICO PARK:Classic Edition",
+      "playtimeForeverHours": 0.7
+    },
+    {
+      "appId": "503560",
+      "name": "911 Operator",
+      "playtimeForeverHours": 1.2
+    },
+    {
+      "appId": "548430",
+      "name": "Deep Rock Galactic",
+      "playtimeForeverHours": 55
+    },
+    {
+      "appId": "552500",
+      "name": "Warhammer: Vermintide 2",
+      "playtimeForeverHours": 16.8
+    },
+    {
+      "appId": "578080",
+      "name": "PUBG: BATTLEGROUNDS",
+      "playtimeForeverHours": 10.5
+    },
+    {
+      "appId": "582660",
+      "name": "Black Desert",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "606150",
+      "name": "Moonlighter",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "607260",
+      "name": "McOsu",
+      "playtimeForeverHours": 14.6
+    },
+    {
+      "appId": "613100",
+      "name": "House Flipper",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "632360",
+      "name": "Risk of Rain 2",
+      "playtimeForeverHours": 10
+    },
+    {
+      "appId": "645630",
+      "name": "Car Mechanic Simulator 2018",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "646910",
+      "name": "The Crew 2",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "680360",
+      "name": "Regions Of Ruin",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "700330",
+      "name": "SCP: Secret Laboratory",
+      "playtimeForeverHours": 1.2
+    },
+    {
+      "appId": "714010",
+      "name": "Aimlabs",
+      "playtimeForeverHours": 15.4
+    },
+    {
+      "appId": "738520",
+      "name": "Breathedge",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "871720",
+      "name": "Ultimate Custom Night",
+      "playtimeForeverHours": 0.2
+    },
+    {
+      "appId": "960090",
+      "name": "Bloons TD 6",
+      "playtimeForeverHours": 30.7
+    },
+    {
+      "appId": "967050",
+      "name": "Pacify",
+      "playtimeForeverHours": 5.3
+    },
+    {
+      "appId": "1172470",
+      "name": "Apex Legends",
+      "playtimeForeverHours": 58.6
+    },
+    {
+      "appId": "1222670",
+      "name": "The Sims™ 4",
+      "playtimeForeverHours": 9.4
+    },
+    {
+      "appId": "1238810",
+      "name": "Battlefield™ V",
+      "playtimeForeverHours": 25.2
+    },
+    {
+      "appId": "1238840",
+      "name": "Battlefield™ 1",
+      "playtimeForeverHours": 6.9
+    },
+    {
+      "appId": "1281930",
+      "name": "tModLoader",
+      "playtimeForeverHours": 76
+    },
+    {
+      "appId": "1283700",
+      "name": "SUPERVIVE",
+      "playtimeForeverHours": 10.1
+    },
+    {
+      "appId": "1289310",
+      "name": "Helltaker",
+      "playtimeForeverHours": 1.3
+    },
+    {
+      "appId": "1290490",
+      "name": "UNBEATABLE [white label]",
+      "playtimeForeverHours": 0.6
+    },
+    {
+      "appId": "1293830",
+      "name": "Forza Horizon 4",
+      "playtimeForeverHours": 104.6
+    },
+    {
+      "appId": "1304930",
+      "name": "The Outlast Trials",
+      "playtimeForeverHours": 36
+    },
+    {
+      "appId": "1325860",
+      "name": "VTube Studio",
+      "playtimeForeverHours": 0.9
+    },
+    {
+      "appId": "1422450",
+      "name": "Deadlock",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "1456200",
+      "name": "Initial Drift Online",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "1608450",
+      "name": "Hellslave",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "1611740",
+      "name": "BattleBit Remastered Playtest",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "1625450",
+      "name": "Muck",
+      "playtimeForeverHours": 2.7
+    },
+    {
+      "appId": "1671340",
+      "name": "Fears to Fathom - Episode 1",
+      "playtimeForeverHours": 0.5
+    },
+    {
+      "appId": "1712840",
+      "name": "Tiny Tina's Assault on Dragon Keep: A Wonderlands One-shot Adventure",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "1714320",
+      "name": "Find Love or Die Trying",
+      "playtimeForeverHours": 2
+    },
+    {
+      "appId": "1782210",
+      "name": "Crab Game",
+      "playtimeForeverHours": 6.3
+    },
+    {
+      "appId": "1922560",
+      "name": "Plants vs. Zombies™ Garden Warfare 2: Deluxe Edition",
+      "playtimeForeverHours": 9.6
+    },
+    {
+      "appId": "1928420",
+      "name": "Farlight 84",
+      "playtimeForeverHours": 34.8
+    },
+    {
+      "appId": "1977530",
+      "name": "One-armed cook",
+      "playtimeForeverHours": 1.4
+    },
+    {
+      "appId": "2021910",
+      "name": "FPS Chess",
+      "playtimeForeverHours": 0.2
+    },
+    {
+      "appId": "2073850",
+      "name": "THE FINALS",
+      "playtimeForeverHours": 11.3
+    },
+    {
+      "appId": "2074920",
+      "name": "The First Descendant",
+      "playtimeForeverHours": 0.5
+    },
+    {
+      "appId": "2139460",
+      "name": "Once Human",
+      "playtimeForeverHours": 0.8
+    },
+    {
+      "appId": "2149010",
+      "name": "Little Nightmares Enhanced Edition",
+      "playtimeForeverHours": 0
+    },
+    {
+      "appId": "2551020",
+      "name": "One-armed robber",
+      "playtimeForeverHours": 0.2
+    },
+    {
+      "appId": "2709570",
+      "name": "Supermarket Together",
+      "playtimeForeverHours": 2
+    },
+    {
+      "appId": "2767030",
+      "name": "Marvel Rivals",
+      "playtimeForeverHours": 12.3
+    },
+    {
+      "appId": "2881650",
+      "name": "Content Warning",
+      "playtimeForeverHours": 6
+    },
+    {
+      "appId": "3564740",
+      "name": "Where Winds Meet",
+      "playtimeForeverHours": 1.7
+    },
+    {
+      "appId": "3678970",
+      "name": "TBH: Task Bar Hero",
+      "playtimeForeverHours": 0.2
+    }
+  ],
+  "source": "steam_web_api"
+}

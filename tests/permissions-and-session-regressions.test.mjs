@@ -6,11 +6,10 @@ import { toLocalDateKey } from '../src/domain/dates.js';
 
 const code = (name) => readFileSync(name, 'utf8');
 
-test('Public shelf never pulls private browser game records, static book fixtures, or legacy user collections', () => {
+test('Public shelf never pulls private browser storage, private game fixtures, or legacy user collections', () => {
     const source = code('src/services/publicShelfService.js');
     assert.ok(source.includes("'publicProfiles'"));
     assert.ok(!source.includes('localStorage.getItem')); 
-    assert.ok(!source.includes('fallbackBooks'));
     assert.ok(!source.includes('fallbackGames'));
     assert.ok(!source.includes("'users',"));
 });

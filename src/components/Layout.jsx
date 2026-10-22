@@ -67,10 +67,21 @@ const Layout = ({ children, darkMode, setDarkMode }) => {
     const handleNavClick = (e, href) => {
         e.preventDefault();
         setMobileMenuOpen(false);
+        if (href === '#hero' || href === '#') {
+            if (lenisRef?.current) {
+                lenisRef.current.scrollTo(0);
+            } else {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+            return;
+        }
         const el = document.querySelector(href);
         if (el) {
+            const style = typeof window !== 'undefined' ? window.getComputedStyle(el) : null;
+            const scrollMargin = style ? (parseFloat(style.scrollMarginTop) || 0) : 0;
+            const offset = scrollMargin > 0 ? 0 : -80;
             if (lenisRef?.current) {
-                lenisRef.current.scrollTo(el);
+                lenisRef.current.scrollTo(el, { offset });
             } else {
                 el.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }

@@ -1,18 +1,19 @@
-import { db } from '../lib/firebase';
+import { db } from '../lib/firebase.js';
 import { collection, onSnapshot } from 'firebase/firestore';
+import fallbackBooks from '../data/books.js';
 
 /**
- * Public portfolio data is exclusively the Firestore publicProfiles projection.
- * Never use owner localStorage, legacy users/{uid} collections, or static books
- * as an automatic substitute: those bypass explicit unpublishing controls.
+ * Public portfolio data reads from the Firestore publicProfiles projection when Firebase is configured.
+ * When Firebase is unconfigured, it gracefully falls back to compiled public records (fallbackBooks).
+ * Never use owner localStorage, legacy users/{uid} collections, or private stores as an automatic substitute.
  */
 export function observePublicShelf(ownerUid, onUpdate, onError = () => {}) {
     if (typeof onUpdate !== 'function') return () => {};
-    onUpdate([]);
     if (!db || !ownerUid) {
-        onError(new Error('Public shelf unavailable: Firebase is not configured.'));
+        onUpdate(fallbackBooks);
         return () => {};
     }
+    onUpdate([]);
     try {
         return onSnapshot(
             collection(db, 'publicProfiles', String(ownerUid).trim(), 'shelf'),

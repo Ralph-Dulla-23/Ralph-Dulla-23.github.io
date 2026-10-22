@@ -1,5 +1,6 @@
 import React from 'react';
 import { useScrollAnimation } from '../hooks/useScrollAnimation';
+import { lenisRef } from '../lib/scrollController';
 
 const Hero = () => {
     const animRef = useScrollAnimation({ threshold: 0.1 });
@@ -7,11 +8,17 @@ const Hero = () => {
     const scrollToProjects = (e) => {
         e.preventDefault();
         const el = document.querySelector('#projects');
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (el) {
+            if (lenisRef?.current) {
+                lenisRef.current.scrollTo(el);
+            } else {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
     };
 
     return (
-        <section id="hero" className="pb-12 pt-10 border-b border-border dark:border-gray-800" ref={animRef} data-animate>
+        <section id="hero" className="scroll-mt-20 pb-12 pt-10 border-b border-border dark:border-gray-800" ref={animRef} data-animate>
             <div className="flex flex-col md:flex-row gap-10 items-center md:items-start">
                 <div className="relative">
                     <div className="w-28 h-28 md:w-32 md:h-32 rounded-[30%] overflow-hidden ring-4 ring-gray-50 dark:ring-gray-800/50 shadow-xl">

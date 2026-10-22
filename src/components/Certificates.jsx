@@ -84,7 +84,7 @@ const Certificates = () => {
 
     return (
         <>
-            <section id="certificates" className="py-12 border-b border-border dark:border-gray-800" ref={animRef} data-animate>
+            <section id="certificates" className="scroll-mt-20 py-12 border-b border-border dark:border-gray-800" ref={animRef} data-animate>
                 <h2 className="text-lg font-display font-semibold text-primary dark:text-gray-100 uppercase tracking-wider mb-8">
                     Certificates
                 </h2>

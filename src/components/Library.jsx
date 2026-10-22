@@ -6,6 +6,65 @@ import { OWNER_UID } from '../lib/config';
 import { Link } from 'react-router-dom';
 import { lenisRef } from '../lib/scrollController';
 
+const LibraryBookCard = ({ book }) => {
+    const [imageError, setImageError] = useState(false);
+    const config = statusConfig[book.status] || {
+        label: book.status === 'want-to-read' ? 'To Read' : (book.status || 'Book'),
+        color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+        barColor: 'bg-blue-500'
+    };
+    const coverSrc = book.cover || (book.coverId ? `https://covers.openlibrary.org/b/id/${book.coverId}-L.jpg` : '');
+
+    // Reset error state if coverSrc changes
+    const [prevCoverSrc, setPrevCoverSrc] = useState(coverSrc);
+    if (prevCoverSrc !== coverSrc) {
+        setPrevCoverSrc(coverSrc);
+        setImageError(false);
+    }
+
+    return (
+        <div className="flex-shrink-0 w-[180px] snap-start cursor-pointer group/card transition-transform duration-200 hover:-translate-y-1">
+            <div className="relative w-[180px] h-[260px] rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow mb-3 bg-gray-100 dark:bg-gray-800">
+                {coverSrc && !imageError ? (
+                    <img
+                        src={coverSrc}
+                        alt={book.title}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={() => setImageError(true)}
+                    />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                        <span className="text-xs text-secondary dark:text-gray-500 text-center px-2 font-medium">
+                            {book.title}
+                        </span>
+                    </div>
+                )}
+                <span className={`absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${config.color}`}>
+                    {config.label}
+                </span>
+            </div>
+
+            <p className="text-sm font-semibold text-primary dark:text-gray-100 truncate">
+                {book.title}
+            </p>
+            <p className="text-xs text-secondary dark:text-gray-400 truncate mt-0.5">
+                {book.author}
+            </p>
+
+            <div className="mt-2 h-[3px] bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div
+                    className={`h-full rounded-full transition-all ${config.barColor}`}
+                    style={{ width: `${book.progress}%` }}
+                ></div>
+            </div>
+            <p className="text-[10px] text-secondary dark:text-gray-500 mt-1">
+                {book.status === 'completed' ? 'Completed' : book.status === 'want-to-read' ? 'Want to Read' : `${book.progress}%`}
+            </p>
+        </div>
+    );
+};
+
 const Library = () => {
     const animRef = useScrollAnimation();
     const carouselRef = useRef(null);
@@ -29,7 +88,7 @@ const Library = () => {
     };
 
     return (
-        <section id="library" className="py-16 border-b border-border dark:border-gray-800" ref={animRef} data-animate>
+        <section id="library" className="scroll-mt-20 py-16 border-b border-border dark:border-gray-800" ref={animRef} data-animate>
             <div className="flex items-baseline justify-between mb-2">
                 <h2 className="text-lg font-display font-semibold text-primary dark:text-gray-100 uppercase tracking-wider">
                     Library
@@ -78,63 +137,9 @@ const Library = () => {
                     className="flex gap-5 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
                 >
-                    {books.map((book, index) => {
-                        const config = statusConfig[book.status] || {
-                            label: book.status === 'want-to-read' ? 'To Read' : (book.status || 'Book'),
-                            color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-                            barColor: 'bg-blue-500'
-                        };
-                        const coverSrc = book.cover || (book.coverId ? `https://covers.openlibrary.org/b/id/${book.coverId}-L.jpg` : '');
-                        return (
-                            <div
-                                key={book.id || index}
-                                className="flex-shrink-0 w-[180px] snap-start cursor-pointer group/card transition-transform duration-200 hover:-translate-y-1"
-                            >
-                                <div className="relative w-[180px] h-[260px] rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow mb-3 bg-gray-100 dark:bg-gray-800">
-                                    {coverSrc ? (
-                                        <img
-                                            src={coverSrc}
-                                            alt={book.title}
-                                            className="w-full h-full object-cover"
-                                            loading="lazy"
-                                            onError={(e) => {
-                                                e.target.style.display = 'none';
-                                                e.target.parentElement.classList.add('flex', 'items-center', 'justify-center');
-                                                const fallback = document.createElement('span');
-                                                fallback.className = 'text-xs text-secondary dark:text-gray-500 text-center px-2 font-medium';
-                                                fallback.textContent = book.title;
-                                                e.target.parentElement.appendChild(fallback);
-                                            }}
-                                        />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center">
-                                            <span className="text-xs text-secondary dark:text-gray-500 text-center px-2 font-medium">{book.title}</span>
-                                        </div>
-                                    )}
-                                    <span className={`absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${config.color}`}>
-                                        {config.label}
-                                    </span>
-                                </div>
-
-                                <p className="text-sm font-semibold text-primary dark:text-gray-100 truncate">
-                                    {book.title}
-                                </p>
-                                <p className="text-xs text-secondary dark:text-gray-400 truncate mt-0.5">
-                                    {book.author}
-                                </p>
-
-                                <div className="mt-2 h-[3px] bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                    <div
-                                        className={`h-full rounded-full transition-all ${config.barColor}`}
-                                        style={{ width: `${book.progress}%` }}
-                                    ></div>
-                                </div>
-                                <p className="text-[10px] text-secondary dark:text-gray-500 mt-1">
-                                    {book.status === 'completed' ? 'Completed' : book.status === 'want-to-read' ? 'Want to Read' : `${book.progress}%`}
-                                </p>
-                            </div>
-                        );
-                    })}
+                    {books.map((book, index) => (
+                        <LibraryBookCard key={book.id || index} book={book} />
+                    ))}
                 </div>
             </div>
 
