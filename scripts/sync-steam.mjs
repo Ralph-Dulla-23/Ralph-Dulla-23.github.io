@@ -195,11 +195,15 @@ async function fetchViaSteamApi(key, id) {
         totalGames: ownedGames.length || recentGames.length,
         totalHours: Math.round(totalHours * 10) / 10,
         recentGames,
-        ownedGamesSummary: ownedGames.map(g => ({
-            appId: String(g.appid),
-            name: g.name,
-            playtimeForeverHours: Math.round(((g.playtime_forever || 0) / 60) * 10) / 10,
-        })),
+        ownedGamesSummary: ownedGames
+            .filter(g => String(g.appid) !== '480' && g.name)
+            .map(g => ({
+                appId: String(g.appid),
+                name: g.name,
+                playtimeForeverHours: Math.round(((g.playtime_forever || 0) / 60) * 10) / 10,
+                logoUrl: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${g.appid}/header.jpg`,
+                storeUrl: `https://store.steampowered.com/app/${g.appid}`,
+            })),
         source: 'steam_web_api',
     };
 }

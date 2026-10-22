@@ -298,26 +298,47 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
             return g;
         });
 
-        if (steamData && Array.isArray(steamData.recentGames)) {
-            steamData.recentGames.forEach((sg) => {
-                if (sg.appId !== '480' && sg.name && sg.name !== 'Spacewar' && !steamTitles.has(normalizeTitle(sg.name))) {
-                    enriched.push({
-                        id: `steam-${sg.appId}`,
-                        title: sg.name,
-                        cover: sg.logoUrl || (sg.appId ? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${sg.appId}/header.jpg` : ''),
-                        platform: 'Steam',
-                        hoursPlayed: sg.playtimeForeverHours || 0,
-                        rating: null,
-                        status: 'playing',
-                        isSteam: true,
-                        steamAppId: sg.appId,
-                        storeUrl: sg.storeUrl || (sg.appId ? `https://store.steampowered.com/app/${sg.appId}` : null),
-                        finishedOn: null,
-                    });
-                }
-            });
+        const pool = [
+            ...(Array.isArray(steamData?.ownedGamesSummary) ? steamData.ownedGamesSummary : []),
+            ...(Array.isArray(steamData?.recentGames) ? steamData.recentGames : []),
+        ];
+
+        const seenAppIds = new Set(
+            enriched.filter((g) => g.steamAppId).map((g) => String(g.steamAppId))
+        );
+
+        const additionalSteamGames = [];
+        for (const sg of pool) {
+            const safeAppId = String(sg.appId);
+            const normTitle = normalizeTitle(sg.name);
+            if (
+                safeAppId !== '480' &&
+                sg.name &&
+                sg.name !== 'Spacewar' &&
+                !seenAppIds.has(safeAppId) &&
+                !steamTitles.has(normTitle)
+            ) {
+                seenAppIds.add(safeAppId);
+                steamTitles.add(normTitle);
+                additionalSteamGames.push({
+                    id: `steam-${safeAppId}`,
+                    title: sg.name,
+                    cover: sg.logoUrl || `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${safeAppId}/header.jpg`,
+                    platform: 'Steam',
+                    hoursPlayed: Number(sg.playtimeForeverHours) || 0,
+                    rating: null,
+                    status: (Number(sg.playtimeForeverHours) || 0) > 0 ? 'playing' : 'backlog',
+                    isSteam: true,
+                    steamAppId: safeAppId,
+                    storeUrl: sg.storeUrl || `https://store.steampowered.com/app/${safeAppId}`,
+                    finishedOn: null,
+                });
+            }
         }
-        return enriched;
+
+        additionalSteamGames.sort((a, b) => (b.hoursPlayed || 0) - (a.hoursPlayed || 0));
+
+        return [...enriched, ...additionalSteamGames];
     }, [games, steamData]);
 
     // Games metrics

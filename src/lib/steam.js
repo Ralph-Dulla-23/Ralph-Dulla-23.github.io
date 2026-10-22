@@ -18,6 +18,24 @@ export async function loadSteamStats(forceRefresh = false) {
         return cachedSteamData;
     }
 
+    const nodeProcess = typeof globalThis !== 'undefined' ? globalThis.process : undefined;
+    if (typeof window === 'undefined' && nodeProcess?.cwd) {
+        try {
+            const fsName = 'node:fs';
+            const pathName = 'node:path';
+            const fs = await import(/* @vite-ignore */ fsName);
+            const path = await import(/* @vite-ignore */ pathName);
+            const filePath = path.resolve(nodeProcess.cwd(), 'public', 'data', 'steam-stats.json');
+            if (fs.existsSync(filePath)) {
+                const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+                cachedSteamData = data;
+                return data;
+            }
+        } catch {
+            // fallback to fetch
+        }
+    }
+
     try {
         const baseUrl = typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL
             ? import.meta.env.BASE_URL
