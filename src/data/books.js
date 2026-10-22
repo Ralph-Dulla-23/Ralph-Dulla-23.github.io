@@ -1,5 +1,6 @@
 // Shared public book data used by the homepage carousel, public library, and owner diary
 // Auto-compiled from Bookmory export (51 total books, private notes & logs removed)
+import bookDescriptions from './bookDescriptions.js';
 
 const books = [
     {
@@ -1469,6 +1470,7 @@ const books = [
 books.forEach((b, i) => {
     b._originalIndex = i;
     b.id = String(b.coverId || b.id || b.title.replace(/\s+/g, '-').toLowerCase() || `book-${i}`);
+    b.description = b.description || bookDescriptions[b.id] || bookDescriptions[String(b.coverId)] || '';
     b.pages = b.pages || 350;
     b.currentPage = b.progress === 100 ? (b.pages || 350) : Math.round(((b.progress || 0) / 100) * (b.pages || 350));
 });

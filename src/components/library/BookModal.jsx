@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { Icons } from './Icons';
 import { Stars } from './BookCard';
 import { statusConfig } from '../../data/books';
+import bookDescriptions from '../../data/bookDescriptions.js';
 
 const OPEN_DURATION = 320;
 const CLOSE_DURATION = 260;
@@ -171,6 +172,8 @@ const BookModal = ({ book, origin = null, onClose }) => {
     const totalPages = book.pages || null;
     const readPages = book.currentPage || (book.status === 'completed' ? totalPages : 0);
 
+    const synopsis = book.description || bookDescriptions[book.id] || bookDescriptions[String(book.coverId)] || book.summary || '';
+
     const handleBackdropClick = (e) => {
         if (e.target === backdropRef.current) {
             handleClose();
@@ -280,16 +283,16 @@ const BookModal = ({ book, origin = null, onClose }) => {
                     {/* Lower Description Box (Matches User Wireframe) */}
                     <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 sm:p-5 border border-gray-100 dark:border-gray-800/80 flex flex-col gap-3">
                         <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-secondary dark:text-gray-400 pb-1 border-b border-gray-200/60 dark:border-gray-700/60">
-                            <span>Description</span>
+                            <span>Synopsis</span>
                             <span className="font-normal lowercase tracking-normal text-secondary dark:text-gray-400">
                                 {readPages ? `${readPages} / ${totalPages || '—'} pages` : (totalPages ? `${totalPages} pgs` : '')}
                             </span>
                         </div>
 
                         {/* Description Body */}
-                        <div className="text-xs sm:text-sm text-secondary dark:text-gray-300 leading-relaxed max-h-36 overflow-y-auto pr-1">
-                            {book.description || book.summary ? (
-                                <p>{book.description || book.summary}</p>
+                        <div className="text-xs sm:text-sm text-secondary dark:text-gray-300 leading-relaxed max-h-48 overflow-y-auto pr-1 space-y-2.5 whitespace-pre-line">
+                            {synopsis ? (
+                                <p className="leading-relaxed">{synopsis}</p>
                             ) : book.notes || book.review ? (
                                 <p className="italic">"{book.notes || book.review}"</p>
                             ) : (
