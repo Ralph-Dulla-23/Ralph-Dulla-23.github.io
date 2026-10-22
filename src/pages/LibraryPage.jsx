@@ -1011,7 +1011,7 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                 </footer>
             </main>
 
-            <BookModal book={selectedBook} origin={modalOrigin} onClose={handleCloseBook} />
+            {selectedBook && <BookModal key={selectedBook.id || selectedBook.title} book={selectedBook} origin={modalOrigin} onClose={handleCloseBook} />}
 
             <style>{`[class*="overflow-x-auto"]::-webkit-scrollbar { display: none; }`}</style>
         </div>

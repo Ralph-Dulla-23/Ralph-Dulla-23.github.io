@@ -333,7 +333,7 @@ const Library = () => {
                 [class*="overflow-x-auto"]::-webkit-scrollbar { display: none; }
             `}</style>
 
-            <BookModal book={selectedBook} origin={modalOrigin} onClose={handleCloseBook} />
+            {selectedBook && <BookModal key={selectedBook.id || selectedBook.title} book={selectedBook} origin={modalOrigin} onClose={handleCloseBook} />}
         </section>
     );
 };

@@ -1,24 +1,155 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { Icons } from './Icons';
 import { Stars } from './BookCard';
 import { statusConfig } from '../../data/books';
-import { useCircularReveal } from '../motion/useCircularReveal';
+
+const OPEN_DURATION = 320;
+const CLOSE_DURATION = 260;
+const EASE_OUT = 'cubic-bezier(.22, 1, .36, 1)';
+const EASE_IN = 'cubic-bezier(.4, 0, .2, 1)';
+
+function reduceMotion() {
+    return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
 
 const BookModal = ({ book, origin = null, onClose }) => {
-    const { surfaceRef, closeWithReveal } = useCircularReveal(origin, onClose);
+    const backdropRef = useRef(null);
+    const dialogRef = useRef(null);
+    const closingRef = useRef(false);
     const [imageError, setImageError] = useState(false);
 
+    // Guaranteed close handler: safe against any animation cancellation or error
+    const handleClose = useCallback(() => {
+        if (closingRef.current) return;
+        closingRef.current = true;
+
+        const backdrop = backdropRef.current;
+        const dialog = dialogRef.current;
+
+        let finished = false;
+        const finalize = () => {
+            if (finished) return;
+            finished = true;
+            onClose();
+        };
+
+        if (reduceMotion() || !dialog || typeof dialog.animate !== 'function') {
+            finalize();
+            return;
+        }
+
+        // Safety fallback: guaranteed to close even if animations reject or stall
+        const fallbackTimer = setTimeout(finalize, CLOSE_DURATION + 40);
+
+        try {
+            // Animate backdrop fade out
+            if (backdrop && typeof backdrop.animate === 'function') {
+                backdrop.animate(
+                    [{ opacity: 1 }, { opacity: 0 }],
+                    { duration: CLOSE_DURATION, easing: EASE_IN, fill: 'forwards' }
+                );
+            }
+
+            // Calculate circle origin relative to dialog
+            const rect = dialog.getBoundingClientRect();
+            const cx = Number.isFinite(origin?.x) ? origin.x - rect.left : rect.width / 2;
+            const cy = Number.isFinite(origin?.y) ? origin.y - rect.top : rect.height / 2;
+            const maxRadius = Math.ceil(Math.hypot(Math.max(cx, rect.width - cx), Math.max(cy, rect.height - cy))) + 4;
+
+            const shrink = dialog.animate([
+                {
+                    clipPath: `circle(${maxRadius}px at ${cx}px ${cy}px)`,
+                    transform: 'scale(1)',
+                    opacity: 1,
+                },
+                {
+                    clipPath: `circle(0px at ${cx}px ${cy}px)`,
+                    transform: 'scale(0.92)',
+                    opacity: 0,
+                },
+            ], {
+                duration: CLOSE_DURATION,
+                easing: EASE_IN,
+                fill: 'forwards',
+            });
+
+            shrink.finished.then(() => {
+                clearTimeout(fallbackTimer);
+                finalize();
+            }).catch(() => {
+                clearTimeout(fallbackTimer);
+                finalize();
+            });
+        } catch {
+            clearTimeout(fallbackTimer);
+            finalize();
+        }
+    }, [origin, onClose]);
+
+    // Circular Reveal Entrance Animation
+    useLayoutEffect(() => {
+        const backdrop = backdropRef.current;
+        const dialog = dialogRef.current;
+        if (!dialog || reduceMotion() || typeof dialog.animate !== 'function') return undefined;
+
+        try {
+            // Animate backdrop fade in
+            if (backdrop && typeof backdrop.animate === 'function') {
+                backdrop.animate(
+                    [{ opacity: 0 }, { opacity: 1 }],
+                    { duration: OPEN_DURATION, easing: EASE_OUT, fill: 'forwards' }
+                );
+            }
+
+            // Calculate circle center relative to dialog
+            const rect = dialog.getBoundingClientRect();
+            const cx = Number.isFinite(origin?.x) ? origin.x - rect.left : rect.width / 2;
+            const cy = Number.isFinite(origin?.y) ? origin.y - rect.top : rect.height / 2;
+            const maxRadius = Math.ceil(Math.hypot(Math.max(cx, rect.width - cx), Math.max(cy, rect.height - cy))) + 4;
+
+            const grow = dialog.animate([
+                {
+                    clipPath: `circle(0px at ${cx}px ${cy}px)`,
+                    transform: 'scale(0.92)',
+                    opacity: 0.8,
+                },
+                {
+                    clipPath: `circle(${maxRadius}px at ${cx}px ${cy}px)`,
+                    transform: 'scale(1)',
+                    opacity: 1,
+                },
+            ], {
+                duration: OPEN_DURATION,
+                easing: EASE_OUT,
+                fill: 'forwards',
+            });
+
+            grow.finished.then(() => {
+                if (!closingRef.current && dialog) {
+                    dialog.style.clipPath = '';
+                    dialog.style.transform = '';
+                    dialog.style.opacity = '';
+                }
+            }).catch(() => {});
+        } catch {
+            // Graceful fallback to static presentation
+        }
+
+        return () => {};
+    }, [origin]);
+
+    // Escape Key Listener
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.key === 'Escape') {
                 e.preventDefault();
-                closeWithReveal();
+                handleClose();
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [closeWithReveal]);
+    }, [handleClose]);
 
     if (!book) return null;
 
@@ -40,63 +171,70 @@ const BookModal = ({ book, origin = null, onClose }) => {
     const totalPages = book.pages || null;
     const readPages = book.currentPage || (book.status === 'completed' ? totalPages : 0);
 
+    const handleBackdropClick = (e) => {
+        if (e.target === backdropRef.current) {
+            handleClose();
+        }
+    };
+
     return (
         <div
-            className="fixed inset-0 z-[55] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm overflow-y-auto"
-            onClick={closeWithReveal}
+            ref={backdropRef}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm overflow-y-auto"
+            onClick={handleBackdropClick}
             role="presentation"
         >
             <div
-                ref={surfaceRef}
+                ref={dialogRef}
                 role="dialog"
                 aria-modal="true"
                 aria-label={book.title}
                 onClick={(e) => e.stopPropagation()}
-                className="relative bg-white dark:bg-gray-900 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden border border-gray-100 dark:border-gray-800 z-[60] my-auto flex flex-col md:flex-row p-5 sm:p-6 gap-6"
+                className="relative bg-white dark:bg-gray-900 rounded-3xl max-w-3xl w-full shadow-2xl overflow-hidden border border-gray-100 dark:border-gray-800 z-50 my-auto flex flex-col md:flex-row max-h-[90vh] md:max-h-[85vh]"
             >
-                {/* Close Button Top Right */}
-                <button
-                    type="button"
-                    onClick={closeWithReveal}
-                    aria-label="Close dialog"
-                    className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-secondary dark:text-gray-300 hover:text-primary dark:hover:text-gray-100 flex items-center justify-center transition-colors cursor-pointer"
-                >
-                    {Icons.close('w-4 h-4')}
-                </button>
-
-                {/* Left Side: Full Vertical Book Cover (Matching User's Sketch) */}
-                <div className="w-full md:w-[220px] flex-shrink-0 flex justify-center">
-                    <div className="relative aspect-[2/3] w-[180px] sm:w-[200px] md:w-full rounded-2xl overflow-hidden shadow-md border border-gray-100 dark:border-gray-800 bg-gray-100 dark:bg-gray-800">
-                        {coverSrc && !imageError ? (
-                            <img
-                                src={coverSrc}
-                                alt={book.title}
-                                className="w-full h-full object-cover rounded-2xl"
-                                onError={() => setImageError(true)}
-                            />
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center p-4 bg-gradient-to-br from-gray-50 to-gray-200 dark:from-gray-800 dark:to-gray-900">
-                                <span className="text-sm text-secondary dark:text-gray-400 text-center font-medium">
-                                    {book.title}
-                                </span>
-                            </div>
-                        )}
-                        <span className={`absolute top-2.5 right-2.5 text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${config.color} shadow-sm backdrop-blur-md`}>
-                            {config.label}
-                        </span>
-                        {book.favorite && (
-                            <span className="absolute top-2.5 left-2.5 text-pink-500 drop-shadow-sm">
-                                {Icons.heart('w-4 h-4')}
+                {/* Left Side: Edge-to-Edge Book Cover (Matches User Wireframe) */}
+                <div className="w-full md:w-[260px] lg:w-[280px] shrink-0 relative bg-gray-100 dark:bg-gray-800 overflow-hidden flex items-center justify-center min-h-[220px] md:min-h-full">
+                    {coverSrc && !imageError ? (
+                        <img
+                            src={coverSrc}
+                            alt={book.title}
+                            className="w-full h-full object-cover absolute inset-0"
+                            onError={() => setImageError(true)}
+                        />
+                    ) : (
+                        <div className="w-full h-full min-h-[220px] flex items-center justify-center p-6 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
+                            <span className="text-base text-secondary dark:text-gray-400 text-center font-semibold">
+                                {book.title}
                             </span>
-                        )}
-                    </div>
+                        </div>
+                    )}
+                    {/* Status Pill on Cover */}
+                    <span className={`absolute top-3.5 right-3.5 text-[11px] font-semibold px-3 py-1 rounded-full ${config.color} shadow-md backdrop-blur-md`}>
+                        {config.label}
+                    </span>
+                    {/* Favorite Heart on Cover */}
+                    {book.favorite && (
+                        <span className="absolute top-3.5 left-3.5 text-pink-500 drop-shadow-md">
+                            {Icons.heart('w-5 h-5')}
+                        </span>
+                    )}
                 </div>
 
-                {/* Right Side: Details & Lower Box (Matching User's Sketch) */}
-                <div className="flex-1 flex flex-col justify-between min-w-0 pr-0 md:pr-4">
+                {/* Right Side: Header, Tags, Divider, Description Box (Matches User Wireframe) */}
+                <div className="flex-1 flex flex-col justify-between p-6 sm:p-7 min-w-0 relative overflow-y-auto">
+                    {/* Close Button Top Right */}
+                    <button
+                        type="button"
+                        onClick={handleClose}
+                        aria-label="Close dialog"
+                        className="absolute top-5 right-5 z-20 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-secondary dark:text-gray-300 hover:text-primary dark:hover:text-gray-100 flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                        {Icons.close('w-4 h-4')}
+                    </button>
+
                     <div>
                         {/* Title & Author */}
-                        <div className="pr-8">
+                        <div className="pr-10">
                             <h3 className="text-xl sm:text-2xl font-display font-bold text-primary dark:text-gray-100 leading-snug">
                                 {book.title}
                             </h3>
@@ -105,29 +243,29 @@ const BookModal = ({ book, origin = null, onClose }) => {
                             </p>
                         </div>
 
-                        {/* Rating, Status & Progress */}
+                        {/* Rating & Progress */}
                         <div className="mt-3 flex items-center gap-3 flex-wrap">
                             <Stars rating={book.rating} />
-                            <span className="text-xs text-secondary dark:text-gray-400">
+                            <span className="text-xs text-secondary dark:text-gray-400 font-medium">
                                 {book.progress || 0}% complete
                             </span>
                         </div>
 
                         {/* Progress Bar */}
-                        <div className="mt-2.5 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                        <div className="mt-2 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                             <div
                                 className={`h-full rounded-full ${config.barColor} transition-all duration-700`}
                                 style={{ width: `${book.progress || 0}%` }}
                             />
                         </div>
 
-                        {/* Genres / Tags */}
+                        {/* Tags / Badges (Directly under title/rating as in sketch) */}
                         {genres.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mt-3">
+                            <div className="flex flex-wrap gap-1.5 mt-3.5">
                                 {genres.map((g) => (
                                     <span
                                         key={g}
-                                        className="text-[11px] px-2.5 py-0.5 rounded-full bg-pink-50 text-pink-600 dark:bg-pink-900/20 dark:text-pink-400 font-medium"
+                                        className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-pink-50 text-pink-600 dark:bg-pink-950/40 dark:text-pink-300 border border-pink-100 dark:border-pink-900/30"
                                     >
                                         {g}
                                     </span>
@@ -137,47 +275,36 @@ const BookModal = ({ book, origin = null, onClose }) => {
                     </div>
 
                     {/* Divider Line (as drawn in sketch) */}
-                    <hr className="my-4 border-gray-100 dark:border-gray-800" />
+                    <hr className="my-5 border-gray-100 dark:border-gray-800" />
 
-                    {/* Lower Box: Description and Stats (as requested by user) */}
-                    <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-3.5 sm:p-4 border border-gray-100 dark:border-gray-800/80 space-y-2.5">
-                        {/* Stats Row */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                            <div className="bg-white dark:bg-gray-900/80 rounded-xl p-2 border border-gray-100 dark:border-gray-800 text-center">
-                                <span className="block text-[10px] text-secondary dark:text-gray-400 uppercase tracking-wider font-semibold">Pages</span>
-                                <span className="font-bold text-primary dark:text-gray-100 mt-0.5 block">
-                                    {readPages ? `${readPages} / ${totalPages || '—'}` : (totalPages ? `${totalPages} pgs` : '—')}
-                                </span>
-                            </div>
-
-                            <div className="bg-white dark:bg-gray-900/80 rounded-xl p-2 border border-gray-100 dark:border-gray-800 text-center">
-                                <span className="block text-[10px] text-secondary dark:text-gray-400 uppercase tracking-wider font-semibold">Started</span>
-                                <span className="font-bold text-primary dark:text-gray-100 mt-0.5 block truncate">
-                                    {startedDate || '—'}
-                                </span>
-                            </div>
-
-                            <div className="bg-white dark:bg-gray-900/80 rounded-xl p-2 border border-gray-100 dark:border-gray-800 text-center col-span-2 sm:col-span-1">
-                                <span className="block text-[10px] text-secondary dark:text-gray-400 uppercase tracking-wider font-semibold">Finished</span>
-                                <span className="font-bold text-primary dark:text-gray-100 mt-0.5 block truncate">
-                                    {finishedDate}
-                                </span>
-                            </div>
+                    {/* Lower Description Box (Matches User Wireframe) */}
+                    <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 sm:p-5 border border-gray-100 dark:border-gray-800/80 flex flex-col gap-3">
+                        <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-secondary dark:text-gray-400 pb-1 border-b border-gray-200/60 dark:border-gray-700/60">
+                            <span>Description</span>
+                            <span className="font-normal lowercase tracking-normal text-secondary dark:text-gray-400">
+                                {readPages ? `${readPages} / ${totalPages || '—'} pages` : (totalPages ? `${totalPages} pgs` : '')}
+                            </span>
                         </div>
 
-                        {/* Description / Summary */}
-                        {book.description || book.summary ? (
-                            <p className="text-xs text-secondary dark:text-gray-300 leading-relaxed max-h-24 overflow-y-auto pr-1">
-                                {book.description || book.summary}
-                            </p>
-                        ) : book.notes || book.review ? (
-                            <p className="text-xs text-secondary dark:text-gray-300 leading-relaxed italic max-h-24 overflow-y-auto pr-1">
-                                "{book.notes || book.review}"
-                            </p>
-                        ) : (
-                            <p className="text-[11px] text-secondary dark:text-gray-400 italic">
-                                Tracked in Ralph's reading diary · {genres.slice(0, 2).join(', ') || 'Literary selection'}
-                            </p>
+                        {/* Description Body */}
+                        <div className="text-xs sm:text-sm text-secondary dark:text-gray-300 leading-relaxed max-h-36 overflow-y-auto pr-1">
+                            {book.description || book.summary ? (
+                                <p>{book.description || book.summary}</p>
+                            ) : book.notes || book.review ? (
+                                <p className="italic">"{book.notes || book.review}"</p>
+                            ) : (
+                                <p className="italic text-secondary dark:text-gray-400">
+                                    Tracked in Ralph's reading diary · {genres.join(', ') || 'Literary selection'}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Mini Stats Footer inside Description Box */}
+                        {(startedDate || finishedDate) && (
+                            <div className="pt-2 border-t border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between text-[11px] text-secondary dark:text-gray-400">
+                                {startedDate && <span>Started: <strong className="text-primary dark:text-gray-200 font-semibold">{startedDate}</strong></span>}
+                                {finishedDate && <span>Finished: <strong className="text-primary dark:text-gray-200 font-semibold">{finishedDate}</strong></span>}
+                            </div>
                         )}
                     </div>
                 </div>
