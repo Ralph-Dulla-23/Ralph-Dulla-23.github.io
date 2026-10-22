@@ -5,8 +5,8 @@ import { Stars } from './BookCard';
 import { statusConfig } from '../../data/books';
 import bookDescriptions from '../../data/bookDescriptions.js';
 
-const OPEN_DURATION = 320;
-const CLOSE_DURATION = 260;
+const OPEN_DURATION = 280;
+const CLOSE_DURATION = 220;
 const EASE_OUT = 'cubic-bezier(.22, 1, .36, 1)';
 const EASE_IN = 'cubic-bezier(.4, 0, .2, 1)';
 
@@ -52,21 +52,19 @@ const BookModal = ({ book, origin = null, onClose }) => {
                 );
             }
 
-            // Calculate circle origin relative to dialog
+            // Calculate transform origin relative to dialog
             const rect = dialog.getBoundingClientRect();
-            const cx = Number.isFinite(origin?.x) ? origin.x - rect.left : rect.width / 2;
-            const cy = Number.isFinite(origin?.y) ? origin.y - rect.top : rect.height / 2;
-            const maxRadius = Math.ceil(Math.hypot(Math.max(cx, rect.width - cx), Math.max(cy, rect.height - cy))) + 4;
+            const originX = Number.isFinite(origin?.x) ? `${origin.x - rect.left}px` : '50%';
+            const originY = Number.isFinite(origin?.y) ? `${origin.y - rect.top}px` : '50%';
+            dialog.style.transformOrigin = `${originX} ${originY}`;
 
             const shrink = dialog.animate([
                 {
-                    clipPath: `circle(${maxRadius}px at ${cx}px ${cy}px)`,
                     transform: 'scale(1)',
                     opacity: 1,
                 },
                 {
-                    clipPath: `circle(0px at ${cx}px ${cy}px)`,
-                    transform: 'scale(0.92)',
+                    transform: 'scale(0.85)',
                     opacity: 0,
                 },
             ], {
@@ -88,7 +86,7 @@ const BookModal = ({ book, origin = null, onClose }) => {
         }
     }, [origin, onClose]);
 
-    // Circular Reveal Entrance Animation
+    // Entrance Animation from Clicked Card Origin
     useLayoutEffect(() => {
         const backdrop = backdropRef.current;
         const dialog = dialogRef.current;
@@ -103,38 +101,35 @@ const BookModal = ({ book, origin = null, onClose }) => {
                 );
             }
 
-            // Calculate circle center relative to dialog
+            // Set transform origin at clicked card position
             const rect = dialog.getBoundingClientRect();
-            const cx = Number.isFinite(origin?.x) ? origin.x - rect.left : rect.width / 2;
-            const cy = Number.isFinite(origin?.y) ? origin.y - rect.top : rect.height / 2;
-            const maxRadius = Math.ceil(Math.hypot(Math.max(cx, rect.width - cx), Math.max(cy, rect.height - cy))) + 4;
+            const originX = Number.isFinite(origin?.x) ? `${origin.x - rect.left}px` : '50%';
+            const originY = Number.isFinite(origin?.y) ? `${origin.y - rect.top}px` : '50%';
+            dialog.style.transformOrigin = `${originX} ${originY}`;
 
             const grow = dialog.animate([
                 {
-                    clipPath: `circle(0px at ${cx}px ${cy}px)`,
-                    transform: 'scale(0.92)',
-                    opacity: 0.8,
+                    transform: 'scale(0.85)',
+                    opacity: 0,
                 },
                 {
-                    clipPath: `circle(${maxRadius}px at ${cx}px ${cy}px)`,
                     transform: 'scale(1)',
                     opacity: 1,
                 },
             ], {
                 duration: OPEN_DURATION,
                 easing: EASE_OUT,
-                fill: 'forwards',
             });
 
             grow.finished.then(() => {
                 if (!closingRef.current && dialog) {
-                    dialog.style.clipPath = '';
                     dialog.style.transform = '';
                     dialog.style.opacity = '';
+                    dialog.style.transformOrigin = '';
                 }
             }).catch(() => {});
         } catch {
-            // Graceful fallback to static presentation
+            // Graceful fallback
         }
 
         return () => {};
@@ -161,6 +156,8 @@ const BookModal = ({ book, origin = null, onClose }) => {
     };
     const coverSrc = book.cover || (book.coverId ? `https://covers.openlibrary.org/b/id/${book.coverId}-L.jpg` : '');
     const genres = Array.isArray(book.genres) ? book.genres : [];
+    const visibleGenres = genres.slice(0, 6);
+    const extraGenres = genres.length - visibleGenres.length;
 
     const startedDate = book.startedOn
         ? new Date(book.startedOn).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
@@ -196,7 +193,7 @@ const BookModal = ({ book, origin = null, onClose }) => {
                 className="relative bg-white dark:bg-gray-900 rounded-3xl max-w-3xl w-full shadow-2xl overflow-hidden border border-gray-100 dark:border-gray-800 z-50 my-auto flex flex-col md:flex-row max-h-[90vh] md:max-h-[85vh]"
             >
                 {/* Left Side: Edge-to-Edge Book Cover (Matches User Wireframe) */}
-                <div className="w-full md:w-[260px] lg:w-[280px] shrink-0 relative bg-gray-100 dark:bg-gray-800 overflow-hidden flex items-center justify-center min-h-[220px] md:min-h-full">
+                <div className="w-full md:w-[260px] lg:w-[280px] shrink-0 relative bg-gray-100 dark:bg-gray-800 overflow-hidden flex items-center justify-center min-h-[240px] md:min-h-full">
                     {coverSrc && !imageError ? (
                         <img
                             src={coverSrc}
@@ -205,7 +202,7 @@ const BookModal = ({ book, origin = null, onClose }) => {
                             onError={() => setImageError(true)}
                         />
                     ) : (
-                        <div className="w-full h-full min-h-[220px] flex items-center justify-center p-6 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
+                        <div className="w-full h-full min-h-[240px] flex items-center justify-center p-6 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
                             <span className="text-base text-secondary dark:text-gray-400 text-center font-semibold">
                                 {book.title}
                             </span>
@@ -263,9 +260,9 @@ const BookModal = ({ book, origin = null, onClose }) => {
                         </div>
 
                         {/* Tags / Badges (Directly under title/rating as in sketch) */}
-                        {genres.length > 0 && (
+                        {visibleGenres.length > 0 && (
                             <div className="flex flex-wrap gap-1.5 mt-3.5">
-                                {genres.map((g) => (
+                                {visibleGenres.map((g) => (
                                     <span
                                         key={g}
                                         className="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-pink-50 text-pink-600 dark:bg-pink-950/40 dark:text-pink-300 border border-pink-100 dark:border-pink-900/30"
@@ -273,6 +270,11 @@ const BookModal = ({ book, origin = null, onClose }) => {
                                         {g}
                                     </span>
                                 ))}
+                                {extraGenres > 0 && (
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-gray-100 text-secondary dark:bg-gray-800 dark:text-gray-400">
+                                        +{extraGenres}
+                                    </span>
+                                )}
                             </div>
                         )}
                     </div>
