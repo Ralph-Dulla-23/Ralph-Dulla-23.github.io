@@ -4,6 +4,7 @@ import { Icons } from './Icons';
 import { Stars } from './BookCard';
 import { statusConfig } from '../../data/books';
 import { getBookSynopsis } from '../../data/bookDescriptions.js';
+import { lenisRef } from '../../lib/scrollController';
 
 const OPEN_DURATION = 280;
 const CLOSE_DURATION = 220;
@@ -19,6 +20,18 @@ const BookModal = ({ book, origin = null, onClose }) => {
     const dialogRef = useRef(null);
     const closingRef = useRef(false);
     const [imageError, setImageError] = useState(false);
+
+    // Lock page scrolling and halt Lenis so nested scroll containers (e.g. synopsis) can scroll freely
+    useEffect(() => {
+        lenisRef.current?.stop();
+        const prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+
+        return () => {
+            lenisRef.current?.start();
+            document.body.style.overflow = prevOverflow;
+        };
+    }, []);
 
     // Guaranteed close handler: safe against any animation cancellation or error
     const handleClose = useCallback(() => {
@@ -180,12 +193,29 @@ const BookModal = ({ book, origin = null, onClose }) => {
     return (
         <div
             ref={backdropRef}
+            data-lenis-prevent
             className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm overflow-y-auto"
             onClick={handleBackdropClick}
             role="presentation"
         >
+            <style>{`
+                .custom-modal-scrollbar::-webkit-scrollbar {
+                    width: 6px;
+                }
+                .custom-modal-scrollbar::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .custom-modal-scrollbar::-webkit-scrollbar-thumb {
+                    background: rgba(156, 163, 175, 0.4);
+                    border-radius: 9999px;
+                }
+                .custom-modal-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: rgba(156, 163, 175, 0.7);
+                }
+            `}</style>
             <div
                 ref={dialogRef}
+                data-lenis-prevent
                 role="dialog"
                 aria-modal="true"
                 aria-label={book.title}
@@ -221,7 +251,10 @@ const BookModal = ({ book, origin = null, onClose }) => {
                 </div>
 
                 {/* Right Side: Header, Tags, Divider, Description Box (Matches User Wireframe) */}
-                <div className="flex-1 flex flex-col justify-between p-6 sm:p-7 min-w-0 relative overflow-y-auto">
+                <div
+                    data-lenis-prevent
+                    className="flex-1 flex flex-col justify-between p-6 sm:p-7 min-w-0 relative overflow-y-auto"
+                >
                     {/* Close Button Top Right */}
                     <button
                         type="button"
@@ -292,7 +325,23 @@ const BookModal = ({ book, origin = null, onClose }) => {
                         </div>
 
                         {/* Description Body */}
-                        <div className="text-xs sm:text-sm text-secondary dark:text-gray-300 leading-relaxed max-h-48 overflow-y-auto pr-1 space-y-2.5 whitespace-pre-line">
+                        <div
+                            data-lenis-prevent
+                            tabIndex={0}
+                            onWheel={(e) => {
+                                e.stopPropagation();
+                            }}
+                            onTouchMove={(e) => {
+                                e.stopPropagation();
+                            }}
+                            className="text-xs sm:text-sm text-secondary dark:text-gray-300 leading-relaxed max-h-48 overflow-y-auto overscroll-contain touch-pan-y pr-2 space-y-2.5 whitespace-pre-line focus:outline-none custom-modal-scrollbar"
+                            style={{
+                                overscrollBehavior: 'contain',
+                                WebkitOverflowScrolling: 'touch',
+                                scrollbarWidth: 'thin',
+                                scrollbarColor: 'rgba(156, 163, 175, 0.4) transparent',
+                            }}
+                        >
                             {synopsis ? (
                                 <p className="leading-relaxed">{synopsis}</p>
                             ) : book.notes || book.review ? (

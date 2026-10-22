@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { Link, useSearchParams } from 'react-router-dom';
 import Lenis from 'lenis';
+import { lenisRef } from '../lib/scrollController';
 import GenreFilter from '../components/library/GenreFilter';
 import { observePublicShelf } from '../services/publicShelfService';
 import { OWNER_UID, isFirebaseConfigured } from '../lib/config';
@@ -246,6 +247,7 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
             easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
             smoothWheel: true,
         });
+        lenisRef.current = lenis;
 
         let rafId = 0;
     function raf(time) {
@@ -264,6 +266,7 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
             cancelAnimationFrame(rafId);
             document.removeEventListener('visibilitychange', onVisibility);
             lenis.destroy();
+            lenisRef.current = null;
         };
     }, []);
 
