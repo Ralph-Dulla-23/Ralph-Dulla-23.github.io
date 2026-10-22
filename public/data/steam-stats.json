@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-22T05:40:40.478Z",
+  "updatedAt": "2026-10-22T05:51:47.758Z",
   "steamId64": "76561198417375364",
   "personaName": "Liz Buxbaum",
   "realName": "SimpingKato",
@@ -30,15 +30,6 @@
       "iconUrl": "https://media.steampowered.com/steamcommunity/public/images/apps/552500/a671f2ddf7359beba9702ac097baf6d50cb07202.jpg",
       "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/552500/header.jpg",
       "storeUrl": "https://store.steampowered.com/app/552500"
-    },
-    {
-      "appId": "480",
-      "name": "Spacewar",
-      "playtime2WkHours": 0.1,
-      "playtimeForeverHours": 197.6,
-      "iconUrl": "",
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/480/header.jpg",
-      "storeUrl": "https://store.steampowered.com/app/480"
     },
     {
       "appId": "548430",

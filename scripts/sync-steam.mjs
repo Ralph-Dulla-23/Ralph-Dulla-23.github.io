@@ -82,7 +82,7 @@ export function parseSteamXmlProfile(xml) {
         const appIdMatch = link.match(/\/app\/(\d+)/) || (statsName && statsName.match(/^\d+$/) ? [null, statsName] : null);
         const appId = appIdMatch ? appIdMatch[1] : statsName || '';
 
-        if (name) {
+        if (name && appId !== '480') {
             recentGames.push({
                 appId,
                 name,
@@ -154,7 +154,7 @@ async function fetchViaSteamApi(key, id) {
 
     const totalHours = ownedGames.reduce((acc, g) => acc + ((g.playtime_forever || 0) / 60), 0);
 
-    const recentGames = recentGamesRaw.map(g => ({
+    const recentGames = recentGamesRaw.filter(g => String(g.appid) !== '480' && g.name).map(g => ({
         appId: String(g.appid),
         name: g.name,
         playtime2WkHours: Math.round(((g.playtime_2weeks || 0) / 60) * 10) / 10,

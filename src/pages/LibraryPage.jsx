@@ -24,6 +24,7 @@ import BookCard from '../components/library/BookCard';
 import { StatCard, ProgressRing } from '../components/library/Stats';
 import BookModal from '../components/library/BookModal';
 import SteamShowcaseCard from '../components/steam/SteamShowcaseCard';
+import { loadSteamStats, findSteamGameHours, normalizeTitle } from '../lib/steam';
 import {
     BsController,
     BsBook,
@@ -38,6 +39,8 @@ import {
     BsLaptop,
     BsArrowRight,
     BsBarChart,
+    BsSteam,
+    BsBoxArrowUpRight,
 } from 'react-icons/bs';
 
 const BOOK_CATEGORIES = [
@@ -169,8 +172,12 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
     const [activeTab, setActiveTab] = useState(initialTab);
     const [books, setBooks] = useState([]);
     const [games, setGames] = useState([]);
+    const [steamData, setSteamData] = useState(null);
     const [gamesLoading, setGamesLoading] = useState(true);
     const [shelfError, setShelfError] = useState(null);
+    useEffect(() => {
+        loadSteamStats().then(setSteamData).catch(() => {});
+    }, []);
 
     const [filter, setFilter] = useState('all');
     const [genreFilter, setGenreFilter] = useState('all');
@@ -273,6 +280,46 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
         if (pool.length) setSelectedBook(pool[Math.floor(Math.random() * pool.length)]);
     };
 
+    // Unified Games: Enrich with Steam data & include active Steam games
+    const unifiedGames = useMemo(() => {
+        const steamTitles = new Set();
+        const enriched = games.map((g) => {
+            const match = findSteamGameHours(g.title, steamData);
+            if (match) {
+                steamTitles.add(normalizeTitle(g.title));
+                return {
+                    ...g,
+                    isSteam: true,
+                    steamAppId: match.appId,
+                    hoursPlayed: Number(g.hoursPlayed) || match.hours || 0,
+                    storeUrl: match.appId ? `https://store.steampowered.com/app/${match.appId}` : null,
+                };
+            }
+            return g;
+        });
+
+        if (steamData && Array.isArray(steamData.recentGames)) {
+            steamData.recentGames.forEach((sg) => {
+                if (sg.appId !== '480' && sg.name && sg.name !== 'Spacewar' && !steamTitles.has(normalizeTitle(sg.name))) {
+                    enriched.push({
+                        id: `steam-${sg.appId}`,
+                        title: sg.name,
+                        cover: sg.logoUrl || (sg.appId ? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${sg.appId}/header.jpg` : ''),
+                        platform: 'Steam',
+                        hoursPlayed: sg.playtimeForeverHours || 0,
+                        rating: null,
+                        status: 'playing',
+                        isSteam: true,
+                        steamAppId: sg.appId,
+                        storeUrl: sg.storeUrl || (sg.appId ? `https://store.steampowered.com/app/${sg.appId}` : null),
+                        finishedOn: null,
+                    });
+                }
+            });
+        }
+        return enriched;
+    }, [games, steamData]);
+
     // Games metrics
     const finishedGames = games.filter(g => g.status === 'finished' || g.finishedOn);
     const totalGameHours = games.reduce((sum, g) => sum + (Number(g.hoursPlayed) || 0), 0);
@@ -281,11 +328,15 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
         ? (ratedGames.reduce((sum, g) => sum + Number(g.rating), 0) / ratedGames.length).toFixed(1)
         : '0.0';
 
-    const platformsSet = new Set(games.map(g => g.platform).filter(Boolean));
+    const hasSteamGames = unifiedGames.some(g => g.isSteam || g.platform === 'Steam');
+    const platformsSet = new Set();
+    if (hasSteamGames) platformsSet.add('Steam');
+    unifiedGames.forEach(g => { if (g.platform && g.platform !== 'Steam') platformsSet.add(g.platform); });
     const allPlatforms = Array.from(platformsSet);
 
-    const filteredGames = games.filter(g => {
+    const filteredGames = unifiedGames.filter(g => {
         if (platformFilter === 'all') return true;
+        if (platformFilter === 'Steam') return g.isSteam || g.platform === 'Steam';
         return g.platform === platformFilter;
     });
 
@@ -456,7 +507,7 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                             }`}
                         >
                             <BsController className="w-3.5 h-3.5" />
-                            Games ({games.length})
+                            Games ({unifiedGames.length})
                         </button>
                     </div>
                 </div>
@@ -563,7 +614,7 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                                     <button
                                         key={f.key}
                                         onClick={() => setFilter(f.key)}
-                                        className={`text-xs px-3.5 py-1.5 rounded-full border font-medium transition-all cursor-pointer ${
+                                        className={`text-xs px-3.5 py-1.5 rounded-full border font-medium transition-all cursor-pointer inline-flex items-center gap-1.5 ${
                                             filter === f.key
                                                 ? 'bg-primary text-white border-primary dark:bg-gray-100 dark:text-gray-900 dark:border-gray-100'
                                                 : 'bg-white dark:bg-gray-900 text-secondary dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500'
@@ -648,7 +699,7 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                         </section>
 
                         {/* Steam Live Profile & Activity */}
-                        <SteamShowcaseCard className="mb-10" />
+                        <SteamShowcaseCard className="mb-10" onFilterSteam={() => setPlatformFilter('Steam')} />
 
                         {/* Gaming Analytics & Visualizations */}
                         <section className="mb-10 space-y-6">
@@ -843,12 +894,13 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                                     <button
                                         key={p}
                                         onClick={() => setPlatformFilter(p)}
-                                        className={`text-xs px-3.5 py-1.5 rounded-full border font-medium transition-all cursor-pointer ${
+                                        className={`text-xs px-3.5 py-1.5 rounded-full border font-medium transition-all cursor-pointer inline-flex items-center gap-1.5 ${
                                             platformFilter === p
                                                 ? 'bg-purple-600 text-white border-purple-600'
                                                 : 'bg-white dark:bg-gray-900 text-secondary dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-gray-400'
                                         }`}
                                     >
+                                        {p === 'Steam' && <BsSteam className="w-3 h-3 text-blue-400" />}
                                         {p}
                                     </button>
                                 ))}
@@ -898,10 +950,20 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                                                 </span>
                                             )}
 
-                                            {game.platform && (
-                                                <span className="absolute bottom-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/90 dark:bg-gray-900/90 text-primary dark:text-gray-100 backdrop-blur-sm">
-                                                    {game.platform}
-                                                </span>
+                                            {(game.platform || game.isSteam) && (
+                                                <div className="absolute bottom-2 left-2 flex items-center gap-1 flex-wrap">
+                                                    {game.platform && game.platform !== 'Steam' && (
+                                                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/90 dark:bg-gray-900/90 text-primary dark:text-gray-100 backdrop-blur-sm shadow-xs">
+                                                            {game.platform}
+                                                        </span>
+                                                    )}
+                                                    {game.isSteam && (
+                                                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#171a21]/90 text-blue-200 border border-blue-500/30 backdrop-blur-sm shadow-xs inline-flex items-center gap-1">
+                                                            <BsSteam className="w-2.5 h-2.5 text-blue-400" />
+                                                            Steam
+                                                        </span>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
 
@@ -914,6 +976,19 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                                                     <BsClock className="w-3 h-3" />
                                                     {game.hoursPlayed || 0} hrs
                                                 </span>
+                                                {!game.finishedOn && game.storeUrl && (
+                                                    <a
+                                                        href={game.storeUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="text-blue-500 hover:text-blue-600 dark:hover:text-blue-400 inline-flex items-center gap-0.5 text-[10px] font-medium"
+                                                        title="Steam Store Page"
+                                                    >
+                                                        <span>Store</span>
+                                                        <BsBoxArrowUpRight className="w-2 h-2" />
+                                                    </a>
+                                                )}
                                                 {game.finishedOn && (
                                                     <span className="flex items-center gap-1">
                                                         <BsCalendarCheck className="w-3 h-3" />
