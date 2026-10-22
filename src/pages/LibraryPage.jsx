@@ -187,6 +187,17 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
     const [filter, setFilter] = useState('all');
     const [genreFilter, setGenreFilter] = useState('all');
     const [selectedBook, setSelectedBook] = useState(null);
+    const [modalOrigin, setModalOrigin] = useState(null);
+
+    const handleOpenBook = (book, origin = null) => {
+        setModalOrigin(origin);
+        setSelectedBook(book);
+    };
+
+    const handleCloseBook = () => {
+        setSelectedBook(null);
+        setModalOrigin(null);
+    };
 
     // Platform filter for games
     const [platformFilter, setPlatformFilter] = useState('all');
@@ -280,9 +291,11 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
         return statusMatch && genreMatch;
     });
 
-    const pickRandom = () => {
+    const pickRandom = (origin = null) => {
         const pool = getCandidateBooks(books, genreFilter);
-        if (pool.length) setSelectedBook(pool[Math.floor(Math.random() * pool.length)]);
+        if (pool.length) {
+            handleOpenBook(pool[Math.floor(Math.random() * pool.length)], origin);
+        }
     };
 
     // Unified Games: Enrich with Steam data & include active Steam games
@@ -538,7 +551,16 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                                     {favorites.map((b, i) => (
                                         <div
                                             key={b.id || i}
-                                            onClick={() => setSelectedBook(b)}
+                                            onClick={(e) => {
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                const origin = {
+                                                    x: Math.round(rect.left + rect.width / 2),
+                                                    y: Math.round(rect.top + rect.height / 2),
+                                                    width: rect.width,
+                                                    height: rect.height,
+                                                };
+                                                handleOpenBook(b, origin);
+                                            }}
                                             className="flex-shrink-0 w-36 cursor-pointer group"
                                         >
                                             <div className="relative aspect-[2/3] rounded-xl overflow-hidden mb-2 bg-gray-100 dark:bg-gray-800 shadow-sm group-hover:shadow-md transition-shadow">
@@ -562,7 +584,16 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                         {/* Random Picker */}
                         <section className="mb-10 text-center" ref={pickRef} data-animate>
                             <button
-                                onClick={pickRandom}
+                                onClick={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const origin = {
+                                        x: Math.round(rect.left + rect.width / 2),
+                                        y: Math.round(rect.top + rect.height / 2),
+                                        width: rect.width,
+                                        height: rect.height,
+                                    };
+                                    pickRandom(origin);
+                                }}
                                 className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-primary dark:bg-gray-100 text-white dark:text-gray-900 text-xs font-semibold hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
                             >
                                 <span className="text-amber-400">{Icons.sparkle()}</span>
@@ -625,7 +656,7 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                                             </div>
                                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                                                 {sectionBooks.map((book, i) => (
-                                                    <BookCard key={book.id || i} book={book} onClick={setSelectedBook} />
+                                                    <BookCard key={book.id || i} book={book} onClick={handleOpenBook} />
                                                 ))}
                                             </div>
                                         </section>
@@ -650,7 +681,7 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                                     )}
                                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                                         {filteredBooks.map((book, i) => (
-                                            <BookCard key={book.id || i} book={book} onClick={setSelectedBook} />
+                                            <BookCard key={book.id || i} book={book} onClick={handleOpenBook} />
                                         ))}
                                     </div>
                                 </section>
@@ -980,7 +1011,7 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                 </footer>
             </main>
 
-            <BookModal book={selectedBook} onClose={() => setSelectedBook(null)} />
+            <BookModal book={selectedBook} origin={modalOrigin} onClose={handleCloseBook} />
 
             <style>{`[class*="overflow-x-auto"]::-webkit-scrollbar { display: none; }`}</style>
         </div>

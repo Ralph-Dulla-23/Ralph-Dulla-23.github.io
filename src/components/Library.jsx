@@ -8,8 +8,9 @@ import { Link } from 'react-router-dom';
 import { lenisRef } from '../lib/scrollController';
 import { BsBook, BsController, BsSteam, BsClock, BsBoxArrowUpRight } from 'react-icons/bs';
 import { loadSteamStats, getUnifiedGames } from '../lib/steam';
+import BookModal from './library/BookModal';
 
-const LibraryBookCard = ({ book }) => {
+const LibraryBookCard = ({ book, onClick }) => {
     const [imageError, setImageError] = useState(false);
     const config = statusConfig[book.status] || {
         label: book.status === 'want-to-read' ? 'To Read' : (book.status || 'Book'),
@@ -25,8 +26,20 @@ const LibraryBookCard = ({ book }) => {
         setImageError(false);
     }
 
+    const handleClick = (e) => {
+        if (!onClick) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const origin = {
+            x: Math.round(rect.left + rect.width / 2),
+            y: Math.round(rect.top + rect.height / 2),
+            width: rect.width,
+            height: rect.height,
+        };
+        onClick(book, origin);
+    };
+
     return (
-        <div className="flex-shrink-0 w-[180px] snap-start cursor-pointer group/card transition-transform duration-200 hover:-translate-y-1">
+        <div onClick={handleClick} className="flex-shrink-0 w-[180px] snap-start cursor-pointer group/card transition-transform duration-200 hover:-translate-y-1">
             <div className="relative w-[180px] h-[260px] rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow mb-3 bg-gray-100 dark:bg-gray-800">
                 {coverSrc && !imageError ? (
                     <img
@@ -70,6 +83,7 @@ const LibraryBookCard = ({ book }) => {
 
 LibraryBookCard.propTypes = {
     book: PropTypes.object.isRequired,
+    onClick: PropTypes.func,
 };
 
 const LibraryGameCard = ({ game }) => {
@@ -165,6 +179,18 @@ const Library = () => {
     const [books, setBooks] = useState([]);
     const [rawGames, setRawGames] = useState([]);
     const [steamData, setSteamData] = useState(null);
+    const [selectedBook, setSelectedBook] = useState(null);
+    const [modalOrigin, setModalOrigin] = useState(null);
+
+    const handleOpenBook = (book, origin = null) => {
+        setModalOrigin(origin);
+        setSelectedBook(book);
+    };
+
+    const handleCloseBook = () => {
+        setSelectedBook(null);
+        setModalOrigin(null);
+    };
 
     useEffect(() => {
         let mounted = true;
@@ -295,7 +321,7 @@ const Library = () => {
                 >
                     {activeTab === 'books'
                         ? books.map((book, index) => (
-                            <LibraryBookCard key={book.id || index} book={book} />
+                            <LibraryBookCard key={book.id || index} book={book} onClick={handleOpenBook} />
                         ))
                         : unifiedGames.map((game, index) => (
                             <LibraryGameCard key={game.id || game.steamAppId || index} game={game} />
@@ -306,6 +332,8 @@ const Library = () => {
             <style>{`
                 [class*="overflow-x-auto"]::-webkit-scrollbar { display: none; }
             `}</style>
+
+            <BookModal book={selectedBook} origin={modalOrigin} onClose={handleCloseBook} />
         </section>
     );
 };

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 import { Icons } from './Icons';
 import { statusConfig } from '../../data/books';
 
@@ -13,6 +14,10 @@ export const Stars = ({ rating }) => {
             ))}
         </div>
     );
+};
+
+Stars.propTypes = {
+    rating: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
 };
 
 const BookCard = ({ book, onClick }) => {
@@ -34,9 +39,21 @@ const BookCard = ({ book, onClick }) => {
         setImageError(false);
     }
 
+    const handleClick = (e) => {
+        if (!onClick) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const origin = {
+            x: Math.round(rect.left + rect.width / 2),
+            y: Math.round(rect.top + rect.height / 2),
+            width: rect.width,
+            height: rect.height,
+        };
+        onClick(book, origin);
+    };
+
     return (
         <div
-            onClick={() => onClick(book)}
+            onClick={handleClick}
             className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
         >
             <div className="relative w-full aspect-[2/3] bg-gray-100 dark:bg-gray-800 overflow-hidden">
@@ -84,6 +101,11 @@ const BookCard = ({ book, onClick }) => {
             </div>
         </div>
     );
+};
+
+BookCard.propTypes = {
+    book: PropTypes.object.isRequired,
+    onClick: PropTypes.func,
 };
 
 export default BookCard;
