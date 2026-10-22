@@ -154,15 +154,22 @@ async function fetchViaSteamApi(key, id) {
 
     const totalHours = ownedGames.reduce((acc, g) => acc + ((g.playtime_forever || 0) / 60), 0);
 
-    const recentGames = recentGamesRaw.filter(g => String(g.appid) !== '480' && g.name).map(g => ({
-        appId: String(g.appid),
-        name: g.name,
-        playtime2WkHours: Math.round(((g.playtime_2weeks || 0) / 60) * 10) / 10,
-        playtimeForeverHours: Math.round(((g.playtime_forever || 0) / 60) * 10) / 10,
-        iconUrl: g.img_icon_url ? `https://media.steampowered.com/steamcommunity/public/images/apps/${g.appid}/${g.img_icon_url}.jpg` : '',
-        logoUrl: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${g.appid}/header.jpg`,
-        storeUrl: `https://store.steampowered.com/app/${g.appid}`,
-    }));
+    const ownedMap = new Map(ownedGames.map(g => [String(g.appid), g]));
+    const recentGames = recentGamesRaw.filter(g => String(g.appid) !== '480' && g.name).map(g => {
+        const owned = ownedMap.get(String(g.appid));
+        const rtime = g.rtime_last_played || owned?.rtime_last_played || 0;
+        return {
+            appId: String(g.appid),
+            name: g.name,
+            playtime2WkHours: Math.round(((g.playtime_2weeks || 0) / 60) * 10) / 10,
+            playtimeForeverHours: Math.round(((g.playtime_forever || 0) / 60) * 10) / 10,
+            lastPlayedTimestamp: rtime,
+            lastPlayed: rtime ? new Date(rtime * 1000).toISOString() : null,
+            iconUrl: g.img_icon_url ? `https://media.steampowered.com/steamcommunity/public/images/apps/${g.appid}/${g.img_icon_url}.jpg` : '',
+            logoUrl: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${g.appid}/header.jpg`,
+            storeUrl: `https://store.steampowered.com/app/${g.appid}`,
+        };
+    });
 
     // If recent games empty but owned games exist, pick top 5 by playtime
     if (recentGames.length === 0 && ownedGames.length > 0) {
@@ -201,6 +208,8 @@ async function fetchViaSteamApi(key, id) {
                 appId: String(g.appid),
                 name: g.name,
                 playtimeForeverHours: Math.round(((g.playtime_forever || 0) / 60) * 10) / 10,
+                lastPlayedTimestamp: g.rtime_last_played || 0,
+                lastPlayed: g.rtime_last_played ? new Date(g.rtime_last_played * 1000).toISOString() : null,
                 logoUrl: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${g.appid}/header.jpg`,
                 storeUrl: `https://store.steampowered.com/app/${g.appid}`,
             })),

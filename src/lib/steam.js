@@ -106,6 +106,8 @@ export function findSteamGameHours(queryTitle, steamData) {
         appId: found.appId || '',
         name: found.name,
         hours: Math.round(hours * 10) / 10,
+        lastPlayedTimestamp: found.lastPlayedTimestamp || 0,
+        lastPlayed: found.lastPlayed || null,
         source: 'steam',
     };
 }

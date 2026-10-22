@@ -292,6 +292,8 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                     isSteam: true,
                     steamAppId: match.appId,
                     hoursPlayed: Number(g.hoursPlayed) || match.hours || 0,
+                    lastPlayedTimestamp: match.lastPlayedTimestamp || 0,
+                    lastPlayed: match.lastPlayed || null,
                     storeUrl: match.appId ? `https://store.steampowered.com/app/${match.appId}` : null,
                 };
             }
@@ -327,9 +329,11 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                     title: sg.name,
                     cover: sg.logoUrl || `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${safeAppId}/header.jpg`,
                     platform: 'Steam',
-                    hoursPlayed: Number(sg.playtimeForeverHours) || 0,
+                    hoursPlayed: hours,
+                    lastPlayedTimestamp: Number(sg.lastPlayedTimestamp) || 0,
+                    lastPlayed: sg.lastPlayed || null,
                     rating: null,
-                    status: (Number(sg.playtimeForeverHours) || 0) > 0 ? 'playing' : 'backlog',
+                    status: hours > 0 ? 'playing' : 'backlog',
                     isSteam: true,
                     steamAppId: safeAppId,
                     storeUrl: sg.storeUrl || `https://store.steampowered.com/app/${safeAppId}`,
@@ -338,9 +342,32 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
             }
         }
 
-        additionalSteamGames.sort((a, b) => (b.hoursPlayed || 0) - (a.hoursPlayed || 0));
+        const getActivityTime = (item) => {
+            if (item.lastPlayedTimestamp) return Number(item.lastPlayedTimestamp) * 1000;
+            if (item.finishedOn) {
+                const t = new Date(item.finishedOn).getTime();
+                if (!isNaN(t)) return t;
+            }
+            if (item.startedOn) {
+                const t = new Date(item.startedOn).getTime();
+                if (!isNaN(t)) return t;
+            }
+            if (item.updatedAt) {
+                const t = new Date(item.updatedAt?.toDate ? item.updatedAt.toDate() : item.updatedAt).getTime();
+                if (!isNaN(t)) return t;
+            }
+            return 0;
+        };
 
-        return [...enriched, ...additionalSteamGames];
+        const all = [...enriched, ...additionalSteamGames];
+        all.sort((a, b) => {
+            const timeA = getActivityTime(a);
+            const timeB = getActivityTime(b);
+            if (timeB !== timeA) return timeB - timeA;
+            return (Number(b.hoursPlayed) || 0) - (Number(a.hoursPlayed) || 0);
+        });
+
+        return all;
     }, [games, steamData]);
 
     // Games metrics
