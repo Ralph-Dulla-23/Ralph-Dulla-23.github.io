@@ -1,19 +1,19 @@
 {
-  "updatedAt": "2026-10-22T09:38:52.980Z",
+  "updatedAt": "2026-10-23T08:56:04.198Z",
   "steamId64": "76561198417375364",
   "personaName": "Liz Buxbaum",
   "realName": "SimpingKato",
   "profileUrl": "https://steamcommunity.com/profiles/76561198417375364/",
-  "onlineState": "online",
-  "stateMessage": "Online",
+  "onlineState": "snooze",
+  "stateMessage": "Offline",
   "currentGame": null,
   "currentGameAppId": null,
   "avatarUrl": "https://avatars.steamstatic.com/6afecbb25e5641aa4bcfd1ea6128ef4b149e4d40_full.jpg",
   "memberSince": "September 2017",
   "summary": "",
-  "hoursPlayed2Wk": 11.4,
+  "hoursPlayed2Wk": 13,
   "totalGames": 74,
-  "totalHours": 869,
+  "totalHours": 870.6,
   "recentGames": [
     {
       "appId": "1304930",
@@ -29,10 +29,10 @@
     {
       "appId": "552500",
       "name": "Warhammer: Vermintide 2",
-      "playtime2WkHours": 0.8,
-      "playtimeForeverHours": 16.8,
-      "lastPlayedTimestamp": 1792599709,
-      "lastPlayed": "2026-10-21T16:21:49.000Z",
+      "playtime2WkHours": 2.4,
+      "playtimeForeverHours": 18.4,
+      "lastPlayedTimestamp": 1792683438,
+      "lastPlayed": "2026-10-22T15:37:18.000Z",
       "iconUrl": "https://media.steampowered.com/steamcommunity/public/images/apps/552500/a671f2ddf7359beba9702ac097baf6d50cb07202.jpg",
       "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/552500/header.jpg",
       "storeUrl": "https://store.steampowered.com/app/552500"
@@ -179,9 +179,9 @@
     {
       "appId": "552500",
       "name": "Warhammer: Vermintide 2",
-      "playtimeForeverHours": 16.8,
-      "lastPlayedTimestamp": 1792599709,
-      "lastPlayed": "2026-10-21T16:21:49.000Z",
+      "playtimeForeverHours": 18.4,
+      "lastPlayedTimestamp": 1792683438,
+      "lastPlayed": "2026-10-22T15:37:18.000Z",
       "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/552500/header.jpg",
       "storeUrl": "https://store.steampowered.com/app/552500"
     },
