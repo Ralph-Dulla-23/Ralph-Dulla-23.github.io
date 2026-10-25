@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-24T08:29:44.569Z",
+  "updatedAt": "2026-10-25T08:49:10.471Z",
   "steamId64": "76561198417375364",
   "personaName": "Liz Buxbaum",
   "realName": "SimpingKato",
@@ -8,7 +8,7 @@
   "stateMessage": "Offline",
   "currentGame": null,
   "currentGameAppId": null,
-  "avatarUrl": "https://avatars.akamai.steamstatic.com/6afecbb25e5641aa4bcfd1ea6128ef4b149e4d40_full.jpg",
+  "avatarUrl": "https://avatars.fastly.steamstatic.com/6afecbb25e5641aa4bcfd1ea6128ef4b149e4d40_full.jpg",
   "memberSince": "September 1, 2017",
   "summary": "ok I pull up",
   "hoursPlayed2Wk": 0,
@@ -20,8 +20,8 @@
       "name": "Warhammer: Vermintide 2",
       "playtime2WkHours": 2.4,
       "playtimeForeverHours": 18.4,
-      "iconUrl": "https://shared.akamai.steamstatic.com/community_assets/images/apps/552500/a671f2ddf7359beba9702ac097baf6d50cb07202.jpg",
-      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/552500/capsule_184x69.jpg?t=1764008361",
+      "iconUrl": "https://shared.fastly.steamstatic.com/community_assets/images/apps/552500/a671f2ddf7359beba9702ac097baf6d50cb07202.jpg",
+      "logoUrl": "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/552500/capsule_184x69.jpg?t=1764008361",
       "storeUrl": "https://store.steampowered.com/app/552500"
     }
   ],
