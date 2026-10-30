@@ -136,6 +136,25 @@ export function clearPrivateMediaSubscriptions() {
     }
 }
 
+/**
+ * Purges private owner data mirrored in localStorage on user sign-out.
+ * Public projections (shelf and highlights) are deliberately preserved.
+ */
+export function clearPrivateLocalStorage() {
+    if (typeof localStorage === 'undefined') return;
+    try {
+        localStorage.removeItem(LS_GAMES_KEY);
+        localStorage.removeItem(LS_BOOKS_KEY);
+        localStorage.removeItem(LS_SESSIONS_KEY);
+        localStorage.removeItem(LS_GAME_NOTES_KEY);
+        localStorage.removeItem(LS_BOOK_NOTES_KEY);
+        localStorage.removeItem(LS_JOURNAL_KEY);
+        localStorage.removeItem(LS_DELETED_IDS_KEY);
+    } catch {
+        /* storage disabled or restricted */
+    }
+}
+
 
 function notifyGameSubscribers() {
     gameSubscribers.forEach((cb) => {
@@ -495,8 +514,8 @@ export async function saveGame(uid, gameData, privateReview = '') {
         }
     }
 
-    // Auto-project to public shelf
-    publishLibraryItem(safeUid, { ...baseFields, mediaType: 'game' }).catch(() => {});
+
+
 
     return gameId;
 }
@@ -706,8 +725,8 @@ export async function saveBook(uid, bookData, privateNotes) {
         }
     }
 
-    // Auto-project to public shelf
-    publishLibraryItem(safeUid, { ...baseFields, mediaType: 'book' }).catch(() => {});
+
+
 
     return bookId;
 }
@@ -799,8 +818,8 @@ export async function updateBookProgress(uid, bookId, currentPage, pages, status
         }
     }
 
-    // Auto-project updated book progress to public shelf
-    publishLibraryItem(safeUid, { ...localBooks[safeBookId], mediaType: 'book' }).catch(() => {});
+
+
 }
 
 /**

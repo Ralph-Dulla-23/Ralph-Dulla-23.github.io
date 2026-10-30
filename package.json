@@ -15,7 +15,7 @@
     "profile:android": "node scripts/profile-android-frames.mjs",
     "verify:privacy": "node scripts/verify-private-source.mjs",
     "release:status": "node scripts/rc1-readiness.mjs",
-    "verify:rules-static": "node scripts/verify-firebase-rules-static.mjs",
+    "verify:rules-static": "node scripts/verify-firebase-config.mjs",
     "verify:emulator": "node scripts/phase11-emulator-acceptance.mjs --run",
     "preflight:emulator": "node scripts/phase11-emulator-acceptance.mjs --preflight",
     "release:gates": "node scripts/phase12-release-gates.mjs --strict",

@@ -116,7 +116,7 @@ const Experience = () => {
                                     {items.map(skill => (
                                         <span
                                             key={skill.name}
-                                            className="text-xs font-medium px-3 py-1.5 bg-gray-100/50 hover:bg-gray-200/70 dark:bg-gray-800 dark:hover:bg-gray-700 text-primary dark:text-gray-200 rounded-full border border-gray-200 dark:border-gray-700 transition-all duration-200 flex items-center gap-1.5 cursor-pointer hover:-translate-y-0.5"
+                                            className="text-xs font-medium px-3 py-1.5 bg-gray-100/50 hover:bg-gray-200/70 dark:bg-gray-800 dark:hover:bg-gray-700 text-primary dark:text-gray-200 rounded-full border border-gray-200 dark:border-gray-700 transition-all duration-200 flex items-center gap-1.5 cursor-default"
                                         >
                                             <skill.icon className={`w-3.5 h-3.5 ${skill.color}`} />
                                             {skill.name}

@@ -260,7 +260,7 @@ const BookModal = ({ book, origin = null, onClose }) => {
                         type="button"
                         onClick={handleClose}
                         aria-label="Close dialog"
-                        className="absolute top-5 right-5 z-20 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-secondary dark:text-gray-300 hover:text-primary dark:hover:text-gray-100 flex items-center justify-center transition-colors cursor-pointer"
+                        className="absolute top-5 right-5 z-20 min-w-11 min-h-11 w-11 h-11 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-secondary dark:text-gray-300 hover:text-primary dark:hover:text-gray-100 flex items-center justify-center transition-colors cursor-pointer"
                     >
                         {Icons.close('w-4 h-4')}
                     </button>
@@ -331,9 +331,7 @@ const BookModal = ({ book, origin = null, onClose }) => {
                             onWheel={(e) => {
                                 e.stopPropagation();
                             }}
-                            onTouchMove={(e) => {
-                                e.stopPropagation();
-                            }}
+                            /* touchmove allowed for smooth mobile scrolling */
                             className="text-xs sm:text-sm text-secondary dark:text-gray-300 leading-relaxed max-h-48 overflow-y-auto overscroll-contain touch-pan-y pr-2 space-y-2.5 whitespace-pre-line focus:outline-none custom-modal-scrollbar"
                             style={{
                                 overscrollBehavior: 'contain',

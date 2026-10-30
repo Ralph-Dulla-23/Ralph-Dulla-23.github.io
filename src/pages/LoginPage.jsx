@@ -14,7 +14,7 @@ const LoginPage = ({ darkMode, setDarkMode }) => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const from = location.state?.from?.pathname || '/app/games';
+    const from = location.state?.from?.pathname || '/app/home';
 
     // If already signed in as owner, redirect
     React.useEffect(() => {

@@ -220,6 +220,10 @@ const books = [
         "rating": 4,
         "favorite": false,
         "genres": [
+            "Fantasy",
+            "Mythology",
+            "Adventure",
+            "Young Adult",
             "Fiction"
         ],
         "startedOn": "2026-05-14",
@@ -418,7 +422,11 @@ const books = [
         "rating": 5,
         "favorite": false,
         "genres": [
-            "Fiction"
+            "Fantasy",
+            "Fairy Tale",
+            "Retelling",
+            "Young Adult",
+            "Romance"
         ],
         "startedOn": "2026-10-07",
         "finishedOn": "2026-10-13",
@@ -617,7 +625,11 @@ const books = [
         "rating": 5,
         "favorite": false,
         "genres": [
-            "Fiction"
+            "Fantasy",
+            "Romance",
+            "Romantasy",
+            "Young Adult",
+            "Fairy Tale"
         ],
         "startedOn": "2026-01-06",
         "finishedOn": "2026-01-11",
@@ -905,7 +917,11 @@ const books = [
         "rating": 2.5,
         "favorite": false,
         "genres": [
-            "Fiction"
+            "Young Adult",
+            "Romance",
+            "Contemporary",
+            "Fiction",
+            "Mental Health"
         ],
         "startedOn": "2026-09-25",
         "finishedOn": "2026-10-06",
@@ -1371,6 +1387,9 @@ const books = [
         "rating": 5,
         "favorite": false,
         "genres": [
+            "Romance",
+            "Rom-Com",
+            "Contemporary",
             "Fiction"
         ],
         "startedOn": "2026-09-01",
@@ -1476,17 +1495,26 @@ books.forEach((b, i) => {
 });
 
 books.sort((a, b) => {
-    // Both are reading: sort by original index reversed
-    if (a.status === 'reading' && b.status === 'reading') {
-        return b._originalIndex - a._originalIndex;
-    }
-    // Only A is reading: A comes first
-    if (a.status === 'reading') return -1;
-    // Only B is reading: B comes first
-    if (b.status === 'reading') return 1;
+    // 1. Reading books always come first
+    if (a.status === 'reading' && b.status !== 'reading') return -1;
+    if (b.status === 'reading' && a.status !== 'reading') return 1;
 
-    // Neither is reading: sort by original index reversed
-    return b._originalIndex - a._originalIndex;
+    // 2. Completed books sorted by finishedOn (most recently completed first)
+    if (a.status === 'completed' && b.status === 'completed') {
+        const dateA = a.finishedOn ? new Date(a.finishedOn).getTime() : 0;
+        const dateB = b.finishedOn ? new Date(b.finishedOn).getTime() : 0;
+        if (dateA !== dateB) return dateB - dateA;
+        return (b._originalIndex || 0) - (a._originalIndex || 0);
+    }
+    if (a.status === 'completed' && b.status !== 'completed') return -1;
+    if (b.status === 'completed' && a.status !== 'completed') return 1;
+
+    // 3. Want to read comes before dropped
+    if (a.status === 'want-to-read' && b.status === 'dropped') return -1;
+    if (b.status === 'want-to-read' && a.status === 'dropped') return 1;
+
+    // 4. Default: original index reversed
+    return (b._originalIndex || 0) - (a._originalIndex || 0);
 });
 
 export default books;

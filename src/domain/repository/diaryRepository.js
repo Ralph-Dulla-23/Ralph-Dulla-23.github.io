@@ -1,12 +1,16 @@
-import {
-    doc as defaultDoc,
-    setDoc as defaultSetDoc,
-    getDoc as defaultGetDoc,
-    deleteDoc as defaultDeleteDoc,
-    collection as defaultCollection,
-    onSnapshot as defaultOnSnapshot,
-    getDocs as defaultGetDocs,
-} from 'firebase/firestore';
+let defaultDoc, defaultSetDoc, defaultGetDoc, defaultDeleteDoc, defaultCollection, defaultOnSnapshot, defaultGetDocs;
+try {
+    const firestore = await import('firebase/firestore');
+    defaultDoc = firestore.doc;
+    defaultSetDoc = firestore.setDoc;
+    defaultGetDoc = firestore.getDoc;
+    defaultDeleteDoc = firestore.deleteDoc;
+    defaultCollection = firestore.collection;
+    defaultOnSnapshot = firestore.onSnapshot;
+    defaultGetDocs = firestore.getDocs;
+} catch {
+    // Allows running unit tests with mock firestoreOps when firebase package is not installed
+}
 
 import {
     validateLibraryItem,

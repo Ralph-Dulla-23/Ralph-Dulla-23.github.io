@@ -106,7 +106,7 @@ const Hero = () => {
                         <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-center md:items-start w-full sm:w-auto font-medium">
                             <button
                                 onClick={scrollToProjects}
-                                className="text-sm text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 transition-all cursor-pointer border-b border-transparent hover:border-primary dark:hover:border-gray-100 pb-0.5"
+                                className="min-h-[44px] px-3 py-2 text-sm text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 transition-all cursor-pointer border-b border-transparent hover:border-primary dark:hover:border-gray-100 inline-flex items-center"
                             >
                                 View My Work ↓
                             </button>
@@ -114,7 +114,7 @@ const Hero = () => {
                             <a
                                 href="/assets/RalphDulla_Resume.pdf"
                                 download
-                                className="text-sm text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 transition-all cursor-pointer flex items-center gap-2 border-b border-transparent hover:border-primary dark:hover:border-gray-100 pb-0.5"
+                                className="min-h-[44px] px-3 py-2 text-sm text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 transition-all cursor-pointer inline-flex items-center gap-2 border-b border-transparent hover:border-primary dark:hover:border-gray-100"
                             >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

@@ -146,8 +146,8 @@ export function validateSession(session) {
         errors.push('activeSeconds must be an integer >= 0.');
     }
 
-    if (!session.timezone) {
-        session.timezone = DEFAULT_TIMEZONE;
+    if (session.startedAt && isNaN(Date.parse(session.startedAt))) {
+        errors.push('startedAt must be a valid ISO date string.');
     }
 
     return { valid: errors.length === 0, errors };

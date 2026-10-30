@@ -172,7 +172,7 @@ const Layout = ({ children, darkMode, setDarkMode }) => {
                             ))}
                             {showDiaryButton && (
                                 <Link
-                                    to="/app/games"
+                                    to="/app/home"
                                     onClick={() => setMobileMenuOpen(false)}
                                     className="flex items-center gap-2 text-base font-semibold py-1.5 text-primary dark:text-white hover:opacity-80 transition-opacity pt-2 border-t border-border/40 dark:border-gray-800/60"
                                 >
@@ -192,7 +192,7 @@ const Layout = ({ children, darkMode, setDarkMode }) => {
             {/* Floating Diary App Pill for Owner or Native App */}
             {showDiaryButton && (
                 <Link
-                    to="/app/games"
+                    to="/app/home"
                     aria-label="Open Diary App"
                     className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-full bg-primary text-white dark:bg-gray-100 dark:text-gray-900 shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 transition-all text-xs font-semibold backdrop-blur-md cursor-pointer border border-white/20 dark:border-gray-800 group"
                 >

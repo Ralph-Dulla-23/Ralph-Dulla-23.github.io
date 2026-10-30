@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import { Icons } from './Icons';
-import { statusConfig } from '../../data/books';
+import fallbackBooks, { statusConfig } from '../../data/books';
 
 export const Stars = ({ rating }) => {
     if (!rating) return <span className="text-xs text-gray-400">—</span>;
@@ -28,7 +28,12 @@ const BookCard = ({ book, onClick }) => {
         barColor: 'bg-blue-500'
     };
     const coverSrc = book.cover || (book.coverId ? `https://covers.openlibrary.org/b/id/${book.coverId}-L.jpg` : '');
-    const genres = Array.isArray(book.genres) ? book.genres : [];
+    const rawGenres = (Array.isArray(book.genres) && book.genres.length > 0)
+        ? book.genres
+        : (Array.isArray(book.tags) && book.tags.length > 0)
+            ? book.tags
+            : (fallbackBooks.find(fb => fb.id === book.id || (fb.title && fb.title.toLowerCase() === (book.title || '').toLowerCase()))?.genres || []);
+    const genres = Array.isArray(rawGenres) ? rawGenres : [];
     const visibleGenres = genres.slice(0, 3);
     const remainingGenres = Math.max(0, genres.length - visibleGenres.length);
 
@@ -51,10 +56,21 @@ const BookCard = ({ book, onClick }) => {
         onClick(book, origin);
     };
 
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleClick(e);
+        }
+    };
+
     return (
         <div
             onClick={handleClick}
-            className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
+            onKeyDown={handleKeyDown}
+            tabIndex={0}
+            role="button"
+            aria-label={`View details for ${book.title} by ${book.author}`}
+            className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
             <div className="relative w-full aspect-[2/3] bg-gray-100 dark:bg-gray-800 overflow-hidden">
                 {coverSrc && !imageError ? (

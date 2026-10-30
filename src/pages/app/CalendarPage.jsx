@@ -454,7 +454,7 @@ export default function CalendarPage({ darkMode, setDarkMode }) {
                                     {daySessions.slice(0, 2).map((s, idx) => (
                                         <div
                                             key={`${s.id || idx}`}
-                                            className="w-7 h-10 sm:w-9 sm:h-12 rounded-md overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shrink-0 relative group"
+                                            className={`${idx === 1 ? 'hidden sm:block ' : ''}w-7 h-10 sm:w-9 sm:h-12 rounded-md overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shrink-0 relative group`}
                                             title={s.itemTitle}
                                         >
                                             {s.itemCover ? (

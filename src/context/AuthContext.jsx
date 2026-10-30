@@ -8,7 +8,7 @@ import {
 import { auth } from '../lib/firebase';
 import { OWNER_UID, isOwner } from '../lib/config';
 import { clearSessionFeeds } from '../hooks/sessionFeed';
-import { clearPrivateMediaSubscriptions } from '../lib/db';
+import { clearPrivateMediaSubscriptions, clearPrivateLocalStorage } from '../lib/db';
 import { flushPublishedItemRefreshes, startPublishedItemAutoRefresh } from '../services/publishedItemSync';
 
 const AuthContext = createContext({
@@ -33,6 +33,7 @@ export const AuthProvider = ({ children }) => {
             if (!currentUser || !isOwner(currentUser)) {
                 clearSessionFeeds();
                 clearPrivateMediaSubscriptions();
+                clearPrivateLocalStorage();
             }
             setUser(currentUser ?? null);
             setLoading(false);
@@ -57,6 +58,7 @@ export const AuthProvider = ({ children }) => {
         if (auth) await firebaseSignOut(auth);
         clearSessionFeeds(); // Remove private in-memory session snapshots on sign-out.
         clearPrivateMediaSubscriptions();
+        clearPrivateLocalStorage();
         setUser(null);
     };
 

@@ -49,7 +49,7 @@ export function checkPhase12ReleaseSource(root) {
   const required = [
     'firestore.rules', 'firebase.json', 'android/gradlew',
     'android/app/src/main/AndroidManifest.xml',
-    'android/app/src/main/java/com/ralph/diary/DiarySecureVaultPlugin.java',
+    'android/app/src/main/java/com/ralph/diary/MainActivity.java',
     'scripts/phase11-emulator-acceptance.mjs',
     'scripts/verify-private-source.mjs',
     'scripts/verify-release-assets.mjs',

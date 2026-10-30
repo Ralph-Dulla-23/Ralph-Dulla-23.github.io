@@ -19,6 +19,14 @@ const LibraryBookCard = ({ book, onClick }) => {
     };
     const coverSrc = book.cover || (book.coverId ? `https://covers.openlibrary.org/b/id/${book.coverId}-L.jpg` : '');
 
+    // Resolve primary genre
+    const genres = Array.isArray(book.genres) && book.genres.length > 0
+        ? book.genres
+        : Array.isArray(book.tags) && book.tags.length > 0
+            ? book.tags
+            : [];
+    const primaryGenre = genres[0];
+
     // Reset error state if coverSrc changes
     const [prevCoverSrc, setPrevCoverSrc] = useState(coverSrc);
     if (prevCoverSrc !== coverSrc) {
@@ -38,14 +46,28 @@ const LibraryBookCard = ({ book, onClick }) => {
         onClick(book, origin);
     };
 
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleClick(e);
+        }
+    };
+
     return (
-        <div onClick={handleClick} className="flex-shrink-0 w-[180px] snap-start cursor-pointer group/card transition-transform duration-200 hover:-translate-y-1">
+        <div
+            onClick={handleClick}
+            onKeyDown={handleKeyDown}
+            tabIndex={0}
+            role="button"
+            aria-label={`View details for ${book.title} by ${book.author}`}
+            className="flex-shrink-0 w-[180px] snap-start cursor-pointer group/card transition-transform duration-200 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl"
+        >
             <div className="relative w-[180px] h-[260px] rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow mb-3 bg-gray-100 dark:bg-gray-800">
                 {coverSrc && !imageError ? (
                     <img
                         src={coverSrc}
                         alt={book.title}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
                         loading="lazy"
                         onError={() => setImageError(true)}
                     />
@@ -71,12 +93,19 @@ const LibraryBookCard = ({ book, onClick }) => {
             <div className="mt-2 h-[3px] bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                 <div
                     className={`h-full rounded-full transition-all ${config.barColor}`}
-                    style={{ width: `${book.progress}%` }}
+                    style={{ width: `${book.progress || 0}%` }}
                 />
             </div>
-            <p className="text-[10px] text-secondary dark:text-gray-500 mt-1">
-                {book.status === 'completed' ? 'Completed' : book.status === 'want-to-read' ? 'Want to Read' : `${book.progress}%`}
-            </p>
+            <div className="flex items-center justify-between text-[10px] text-secondary dark:text-gray-500 mt-1">
+                <span>
+                    {book.status === 'completed' ? 'Completed' : book.status === 'want-to-read' ? 'Want to Read' : `${book.progress || 0}%`}
+                </span>
+                {primaryGenre && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-pink-50 text-pink-600 dark:bg-pink-900/20 dark:text-pink-400 font-medium truncate max-w-[85px]">
+                        {primaryGenre}
+                    </span>
+                )}
+            </div>
         </div>
     );
 };
@@ -218,6 +247,28 @@ const Library = () => {
 
     const readingCount = books.filter((b) => b.status === 'reading').length;
 
+    // Books sorted by recent reads or activity (reading first, then recent finished/updated, dropped last)
+    const sortedBooks = useMemo(() => {
+        return [...books].sort((a, b) => {
+            if (a.status === 'reading' && b.status !== 'reading') return -1;
+            if (b.status === 'reading' && a.status !== 'reading') return 1;
+
+            const dateA = a.lastReadAt || a.finishedOn || a.startedOn || a.updatedAt || '';
+            const dateB = b.lastReadAt || b.finishedOn || b.startedOn || b.updatedAt || '';
+            const timeA = dateA ? new Date(dateA).getTime() : 0;
+            const timeB = dateB ? new Date(dateB).getTime() : 0;
+            if (timeA !== timeB) return timeB - timeA;
+
+            if (a.status === 'completed' && b.status !== 'completed') return -1;
+            if (b.status === 'completed' && a.status !== 'completed') return 1;
+
+            if (a.status === 'want-to-read' && b.status === 'dropped') return -1;
+            if (b.status === 'want-to-read' && a.status === 'dropped') return 1;
+
+            return (b._originalIndex || 0) - (a._originalIndex || 0);
+        });
+    }, [books]);
+
     const scroll = (direction) => {
         if (carouselRef.current) {
             const scrollAmount = direction === 'left' ? -400 : 400;
@@ -282,7 +333,7 @@ const Library = () => {
             {/* Dynamic Subtitle */}
             <div className="text-sm text-secondary dark:text-gray-400 mb-10 flex items-center gap-2 flex-wrap">
                 {activeTab === 'books' ? (
-                    <span>{books.length} books · Currently reading {readingCount}</span>
+                    <span>{books.length} books · Currently reading {readingCount} · Sorted by recent activity</span>
                 ) : steamData?.onlineState === 'in-game' ? (
                     <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -296,7 +347,7 @@ const Library = () => {
             <div className="relative group">
                 <button
                     onClick={() => scroll('left')}
-                    className="absolute left-0 top-[120px] -translate-x-1/2 z-10 w-9 h-9 rounded-full bg-white dark:bg-gray-800 border border-border dark:border-gray-700 shadow-md flex items-center justify-center text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
+                    className="absolute left-0 top-[120px] -translate-x-1/2 z-10 w-9 h-9 rounded-full bg-white dark:bg-gray-800 border border-border dark:border-gray-700 shadow-md flex items-center justify-center text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 transition-all cursor-pointer opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary"
                     aria-label="Scroll left"
                 >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -306,7 +357,7 @@ const Library = () => {
 
                 <button
                     onClick={() => scroll('right')}
-                    className="absolute right-0 top-[120px] translate-x-1/2 z-10 w-9 h-9 rounded-full bg-white dark:bg-gray-800 border border-border dark:border-gray-700 shadow-md flex items-center justify-center text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
+                    className="absolute right-0 top-[120px] translate-x-1/2 z-10 w-9 h-9 rounded-full bg-white dark:bg-gray-800 border border-border dark:border-gray-700 shadow-md flex items-center justify-center text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 hover:border-gray-400 dark:hover:border-gray-500 transition-all cursor-pointer opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary"
                     aria-label="Scroll right"
                 >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -320,7 +371,7 @@ const Library = () => {
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
                 >
                     {activeTab === 'books'
-                        ? books.map((book, index) => (
+                        ? sortedBooks.map((book, index) => (
                             <LibraryBookCard key={book.id || index} book={book} onClick={handleOpenBook} />
                         ))
                         : unifiedGames.map((game, index) => (

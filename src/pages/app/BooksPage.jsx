@@ -490,6 +490,26 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
             if (!titleMatch && !authorMatch) return false;
         }
         return true;
+    }).sort((a, b) => {
+        if (filter === 'completed') {
+            const timeA = a.finishedOn ? new Date(a.finishedOn).getTime() : 0;
+            const timeB = b.finishedOn ? new Date(b.finishedOn).getTime() : 0;
+            if (timeA !== timeB) return timeB - timeA;
+        }
+        if (filter === 'all') {
+            if (a.status === 'reading' && b.status !== 'reading') return -1;
+            if (b.status === 'reading' && a.status !== 'reading') return 1;
+            if (a.status === 'completed' && b.status === 'completed') {
+                const timeA = a.finishedOn ? new Date(a.finishedOn).getTime() : 0;
+                const timeB = b.finishedOn ? new Date(b.finishedOn).getTime() : 0;
+                if (timeA !== timeB) return timeB - timeA;
+            }
+            if (a.status === 'completed' && b.status !== 'completed') return -1;
+            if (b.status === 'completed' && a.status !== 'completed') return 1;
+            if (a.status === 'want-to-read' && b.status === 'dropped') return -1;
+            if (a.status === 'want-to-read' && a.status === 'dropped') return 1;
+        }
+        return 0;
     });
 
     const readingCount = books.filter(b => b.status === 'reading').length;
@@ -692,6 +712,13 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                         <p className="text-[10px] text-secondary dark:text-gray-500 mt-1">
                                             {book.status === 'completed' ? 'Completed' : (book.pages ? `${book.currentPage || 0} / ${book.pages} p. (${book.progress || 0}%)` : `${book.currentPage || 0} pages read`)}
                                         </p>
+                                        <div className="flex flex-wrap gap-1 mt-2">
+                                            {((Array.isArray(book.genres) && book.genres.length > 0 ? book.genres : (Array.isArray(book.tags) ? book.tags : [])).slice(0, 2)).map(g => (
+                                                <span key={g} className="text-[9px] px-1.5 py-0.5 rounded-full bg-pink-50 text-pink-600 dark:bg-pink-900/20 dark:text-pink-400 font-medium">
+                                                    {g}
+                                                </span>
+                                            ))}
+                                        </div>
                                     </div>
                                 </Link>
 
@@ -703,6 +730,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                         }}
                                         className="diary-press min-w-11 min-h-11 inline-flex items-center justify-center text-secondary dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 cursor-pointer"
                                         title="Reading Timer"
+                                        aria-label={`Reading timer for ${book.title}`}
                                     >
                                         <BsClock className="w-3.5 h-3.5" />
                                     </button>
@@ -713,6 +741,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                         }}
                                         className="diary-press min-w-11 min-h-11 inline-flex items-center justify-center text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 cursor-pointer"
                                         title="Edit Book"
+                                        aria-label={`Edit ${book.title}`}
                                     >
                                         <BsPencilSquare className="w-3.5 h-3.5" />
                                     </button>
@@ -723,6 +752,7 @@ const BooksPage = ({ darkMode, setDarkMode }) => {
                                         }}
                                         className="diary-press min-w-11 min-h-11 inline-flex items-center justify-center text-secondary dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 cursor-pointer"
                                         title="Delete Book"
+                                        aria-label={`Delete ${book.title}`}
                                     >
                                         <BsTrash3 className="w-3.5 h-3.5" />
                                     </button>

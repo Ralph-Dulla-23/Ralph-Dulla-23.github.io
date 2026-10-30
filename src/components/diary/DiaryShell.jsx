@@ -153,7 +153,7 @@ function DiaryFrame({ children, darkMode, setDarkMode }) {
           <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
               {isDetail ? (
-                <button type="button" className="diary-icon-button shrink-0" onClick={() => navigate(-1)} aria-label="Go back"><span aria-hidden="true">←</span></button>
+                <button type="button" className="diary-icon-button shrink-0" onClick={() => { if (window.history.length > 1) { navigate(-1); } else { const fallback = location.pathname.includes('/games/') ? '/app/library/games' : '/app/library/books'; navigate(fallback); } }} aria-label="Go back"><span aria-hidden="true">←</span></button>
               ) : null}
               <NavLink to="/app/home" className="font-display font-semibold tracking-tight text-[17px] sm:text-lg truncate" aria-label="Diary Home">{title}</NavLink>
             </div>

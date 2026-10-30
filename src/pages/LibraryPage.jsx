@@ -174,6 +174,9 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
     const tabParam = searchParams.get('tab');
     const resolvedTab = tabParam === 'games' || tabParam === 'books' ? tabParam : null;
     const [userTab, setUserTab] = useState(initialTab);
+    useEffect(() => {
+        setUserTab(initialTab);
+    }, [initialTab]);
     const activeTab = resolvedTab || userTab;
     const setActiveTab = setUserTab;
     const [books, setBooks] = useState([]);
@@ -432,7 +435,7 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                         </Link>
                         {showDiaryButton && (
                             <Link
-                                to="/app/games"
+                                to="/app/home"
                                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 dark:bg-gray-800 text-primary dark:text-gray-200 hover:bg-primary hover:text-white dark:hover:bg-gray-700 text-xs font-semibold transition-all border border-primary/20 dark:border-gray-700"
                             >
                                 <BsController className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
@@ -640,7 +643,14 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                                 </p>
                             ) : filter === 'all' ? (
                                 BOOK_CATEGORIES.map((cat) => {
-                                    const sectionBooks = filteredBooks.filter(cat.match);
+                                    const sectionBooks = filteredBooks.filter(cat.match).sort((a, b) => {
+                                        if (cat.key === 'completed') {
+                                            const timeA = a.finishedOn ? new Date(a.finishedOn).getTime() : 0;
+                                            const timeB = b.finishedOn ? new Date(b.finishedOn).getTime() : 0;
+                                            if (timeA !== timeB) return timeB - timeA;
+                                        }
+                                        return 0;
+                                    });
                                     if (sectionBooks.length === 0) return null;
                                     return (
                                         <section key={cat.key} className="space-y-4">
@@ -683,7 +693,14 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
                                         </div>
                                     )}
                                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                                        {filteredBooks.map((book, i) => (
+                                        {(filter === 'completed'
+                                            ? [...filteredBooks].sort((a, b) => {
+                                                const timeA = a.finishedOn ? new Date(a.finishedOn).getTime() : 0;
+                                                const timeB = b.finishedOn ? new Date(b.finishedOn).getTime() : 0;
+                                                return timeB - timeA;
+                                            })
+                                            : filteredBooks
+                                        ).map((book, i) => (
                                             <BookCard key={book.id || i} book={book} onClick={handleOpenBook} />
                                         ))}
                                     </div>

@@ -268,7 +268,7 @@ export default function BookDetailPage({ darkMode, setDarkMode }) {
             <div className="mb-6 flex items-center justify-between">
                 <Link
                     to="/app/library/books"
-                    className="inline-flex items-center gap-2 text-xs font-semibold text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 transition-colors"
+                    className="hidden sm:inline-flex items-center gap-2 text-xs font-semibold text-secondary dark:text-gray-400 hover:text-primary dark:hover:text-gray-100 transition-colors"
                 >
                     <BsArrowLeft className="w-4 h-4" /> Back to Books
                 </Link>

@@ -145,13 +145,13 @@ const Certificates = () => {
                     onClick={closeModal}
                 >
                     <div
-                        className="relative bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden border border-border dark:border-gray-700 animate-fade-in-up flex flex-col"
+                        role="dialog" aria-modal="true" aria-labelledby="cert-modal-title" className="relative bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden border border-border dark:border-gray-700 animate-fade-in-up flex flex-col"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Modal Header */}
                         <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 sm:py-4 border-b border-border dark:border-gray-800 flex-shrink-0">
                             <div className="min-w-0 pr-3">
-                                <h3 className="text-sm sm:text-base font-display font-semibold text-primary dark:text-gray-100 truncate">
+                                <h3 id="cert-modal-title" className="text-sm sm:text-base font-display font-semibold text-primary dark:text-gray-100 truncate">
                                     {selectedCert.title}
                                 </h3>
                                 <p className="text-xs text-secondary dark:text-gray-400 mt-0.5 truncate">
