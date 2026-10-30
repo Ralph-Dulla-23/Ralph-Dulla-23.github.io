@@ -174,9 +174,11 @@ const LibraryPage = ({ darkMode, setDarkMode, initialTab = 'books' }) => {
     const tabParam = searchParams.get('tab');
     const resolvedTab = tabParam === 'games' || tabParam === 'books' ? tabParam : null;
     const [userTab, setUserTab] = useState(initialTab);
-    useEffect(() => {
+    const [prevInitialTab, setPrevInitialTab] = useState(initialTab);
+    if (prevInitialTab !== initialTab) {
+        setPrevInitialTab(initialTab);
         setUserTab(initialTab);
-    }, [initialTab]);
+    }
     const activeTab = resolvedTab || userTab;
     const setActiveTab = setUserTab;
     const [books, setBooks] = useState([]);

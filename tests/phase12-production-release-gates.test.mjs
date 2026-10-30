@@ -17,7 +17,7 @@ const required = [
   '.github/workflows/deploy.yml', '.github/workflows/verify.yml',
   'package.json', 'package-lock.json', 'firestore.rules', 'firebase.json',
   'android/gradlew', 'android/app/src/main/AndroidManifest.xml',
-  'android/app/src/main/java/com/ralph/diary/DiarySecureVaultPlugin.java',
+  'android/app/src/main/java/com/ralph/diary/MainActivity.java',
   'scripts/phase11-emulator-acceptance.mjs',
   'scripts/verify-private-source.mjs', 'scripts/verify-release-assets.mjs',
 ];
@@ -84,9 +84,13 @@ test('Gate recognizes correctly locked manifest in a non-production synthetic fi
   assert.equal(result.overall, 'source-gates-pass');
 }));
 
-test('Strict CLI exits nonzero on blocked release gate', () => {
-  const result = spawnSync(process.execPath, ['scripts/phase12-release-gates.mjs', '--strict'], { cwd: root, encoding: 'utf8' });
+test('Strict CLI exits nonzero on blocked release gate', () => fixture(dir => {
+  const deployPath = resolve(dir, '.github/workflows/deploy.yml');
+  const original = readFileSync(deployPath, 'utf8').replace(/\r?\n/g, '\n');
+  writeFileSync(deployPath, original.replace("inputs.confirm_production == 'DEPLOY_APPROVED'", 'true'));
+  const scriptPath = resolve(root, 'scripts/phase12-release-gates.mjs');
+  const result = spawnSync(process.execPath, [scriptPath, '--strict'], { cwd: dir, encoding: 'utf8' });
   assert.equal(result.status, 1);
   assert.match(result.stdout, /BLOCK/);
   assert.doesNotMatch(result.stdout, /source-gates-pass/);
-});
+}));
