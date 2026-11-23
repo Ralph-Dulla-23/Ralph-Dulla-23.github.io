@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-22T12:08:14.968Z",
+  "updatedAt": "2026-11-23T13:51:02.516Z",
   "steamId64": "76561198417375364",
   "personaName": "Liz Buxbaum",
   "realName": "SimpingKato",
@@ -8,20 +8,20 @@
   "stateMessage": "Offline",
   "currentGame": null,
   "currentGameAppId": null,
-  "avatarUrl": "https://avatars.fastly.steamstatic.com/6afecbb25e5641aa4bcfd1ea6128ef4b149e4d40_full.jpg",
+  "avatarUrl": "https://avatars.akamai.steamstatic.com/6afecbb25e5641aa4bcfd1ea6128ef4b149e4d40_full.jpg",
   "memberSince": "September 1, 2017",
   "summary": "ok I pull up",
   "hoursPlayed2Wk": 0,
   "totalGames": 1,
-  "totalHours": 32,
+  "totalHours": 34,
   "recentGames": [
     {
       "appId": "1422450",
       "name": "Deadlock",
-      "playtime2WkHours": 24.8,
-      "playtimeForeverHours": 32,
-      "iconUrl": "https://shared.fastly.steamstatic.com/community_assets/images/apps/1422450/f6da1420a173324d49bcd470fa3eee781ad0fa5e.jpg",
-      "logoUrl": "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/1422450/88b400eca727f0547232b49b3e62827f07900c77/capsule_184x69.jpg?t=1790716179",
+      "playtime2WkHours": 26,
+      "playtimeForeverHours": 34,
+      "iconUrl": "https://shared.akamai.steamstatic.com/community_assets/images/apps/1422450/f6da1420a173324d49bcd470fa3eee781ad0fa5e.jpg",
+      "logoUrl": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1422450/88b400eca727f0547232b49b3e62827f07900c77/capsule_184x69.jpg?t=1790716179",
       "storeUrl": "https://store.steampowered.com/app/1422450"
     }
   ],
